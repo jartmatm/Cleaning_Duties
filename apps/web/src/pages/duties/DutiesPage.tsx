@@ -11,6 +11,7 @@ import { SectionTitle } from "../../components/common/section-title";
 import { ConfirmationDialog } from "../../components/common/confirmation-dialog";
 import { listSites, type SiteItem } from "../../services/sites-service";
 import { createDuty, deleteDuty, listDuties, type DutyItem, updateDuty } from "../../services/duties-service";
+import { listAssignableMembers, type AssigneeOption } from "../../services/assignments-service";
 import { useSession } from "../../hooks/use-session";
 import { dutyFormSchema, type DutyFormInput, DUTY_PRIORITIES, DUTY_STATUSES } from "@cleaning-duties/shared";
 
@@ -31,6 +32,12 @@ export function DutiesPage() {
 
   const activeSiteId = selectedSiteId ?? sites[0]?.id ?? null;
 
+  const { data: assignees = [] } = useQuery({
+    queryKey: ["assignees", activeSiteId],
+    queryFn: () => listAssignableMembers(activeSiteId ?? ""),
+    enabled: Boolean(activeSiteId),
+  });
+
   const { data: duties = [], isLoading } = useQuery({
     queryKey: ["duties", activeSiteId, search],
     queryFn: () => listDuties(activeSiteId ?? "", search),
@@ -47,6 +54,7 @@ export function DutiesPage() {
       dueDate: "",
       equipment: "",
       referencePhotos: "",
+      assignedUserIds: [],
     },
   });
 
@@ -95,6 +103,7 @@ export function DutiesPage() {
       dueDate: "",
       equipment: "",
       referencePhotos: "",
+      assignedUserIds: [],
     });
   }
 
@@ -109,6 +118,7 @@ export function DutiesPage() {
       dueDate: duty.dueDate ? duty.dueDate.slice(0, 16) : "",
       equipment: duty.equipment.join(", "),
       referencePhotos: duty.referencePhotos.join(", "),
+      assignedUserIds: duty.assignedUserIds,
     });
   }
 
@@ -249,6 +259,20 @@ export function DutiesPage() {
             <div className="space-y-2 lg:col-span-2">
               <label className="text-sm font-medium">Reference photos</label>
               <Input {...form.register("referencePhotos")} placeholder="https://..., https://..." />
+            </div>
+            <div className="space-y-3 lg:col-span-2">
+              <label className="text-sm font-medium">Assign cleaners</label>
+              <div className="grid gap-3 md:grid-cols-2">
+                {assignees.map((assignee: AssigneeOption) => (
+                  <label key={assignee.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <input type="checkbox" value={assignee.id} {...form.register("assignedUserIds")} />
+                    <div>
+                      <p className="text-sm font-medium text-slate-950">{assignee.name}</p>
+                      <p className="text-xs text-slate-500">{assignee.role}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
             </div>
             <div className="flex gap-3 lg:col-span-2">
               <Button type="submit">{editingDuty ? "Save changes" : "Create duty"}</Button>

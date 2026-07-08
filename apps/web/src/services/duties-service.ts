@@ -1,5 +1,6 @@
 import { dutyFormSchema, type DutyFormInput } from "@cleaning-duties/shared";
 import { supabase } from "./supabase-client";
+import { replaceDutyAssignments } from "./assignments-service";
 
 export type DutyRow = {
   id: string;
@@ -33,6 +34,7 @@ export type DutyItem = {
   equipment: string[];
   referencePhotos: string[];
   completionPhotos: string[];
+  assignedUserIds: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -52,6 +54,7 @@ function mapDuty(row: DutyRow): DutyItem {
     equipment: row.equipment,
     referencePhotos: row.reference_photos,
     completionPhotos: row.completion_photos,
+    assignedUserIds: [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -75,6 +78,7 @@ function toFormInput(values: DutyFormInput) {
     dueDate: parsed.dueDate ? new Date(parsed.dueDate).toISOString() : null,
     equipment: parseCsvList(parsed.equipment),
     reference_photos: parseCsvList(parsed.referencePhotos),
+    assignedUserIds: parsed.assignedUserIds ?? [],
   };
 }
 
@@ -119,7 +123,9 @@ export async function createDuty(siteId: string, createdBy: string, values: Duty
     throw new Error(error.message);
   }
 
-  return mapDuty(data as DutyRow);
+  const duty = mapDuty(data as DutyRow);
+  await replaceDutyAssignments(duty.id, payload.assignedUserIds, createdBy);
+  return duty;
 }
 
 export async function updateDuty(dutyId: string, values: DutyFormInput) {
@@ -143,7 +149,9 @@ export async function updateDuty(dutyId: string, values: DutyFormInput) {
     throw new Error(error.message);
   }
 
-  return mapDuty(data as DutyRow);
+  const duty = mapDuty(data as DutyRow);
+  await replaceDutyAssignments(duty.id, payload.assignedUserIds, duty.createdBy);
+  return duty;
 }
 
 export async function deleteDuty(dutyId: string) {

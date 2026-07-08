@@ -5,8 +5,18 @@ import { PageHeader } from "../../components/common/page-header";
 import { QuickActions } from "../../components/common/quick-actions";
 import { SectionTitle } from "../../components/common/section-title";
 import { StatCard } from "../../components/common/stat-card";
+import { useQuery } from "@tanstack/react-query";
+import { useSession } from "../../hooks/use-session";
+import { listNotifications } from "../../services/notifications-service";
 
 export function DashboardPage() {
+  const { userId } = useSession();
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["notifications", userId],
+    queryFn: () => listNotifications(userId ?? ""),
+    enabled: Boolean(userId),
+  });
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -50,8 +60,8 @@ export function DashboardPage() {
 
         <div className="space-y-6">
           <QuickActions />
-          <Card className="space-y-4 p-5">
-            <SectionTitle title="Recent activity" description="Latest changes across the company." />
+        <Card className="space-y-4 p-5">
+          <SectionTitle title="Recent activity" description="Latest changes across the company." />
             <div className="space-y-4 text-sm">
               {[
                 { title: "Kevin completed Lobby deep clean", meta: "8 minutes ago" },
@@ -67,10 +77,25 @@ export function DashboardPage() {
                 </div>
               ))}
             </div>
-          </Card>
-          <Card className="space-y-4 p-5">
-            <SectionTitle title="Top cleaners" description="Performance by completion and incident-free work." />
-            <div className="space-y-4">
+        </Card>
+        <Card className="space-y-4 p-5">
+          <SectionTitle title="Notifications" description="Unread alerts and duty updates." />
+          <div className="space-y-3">
+            {notifications.length === 0 ? (
+              <p className="text-sm text-slate-500">No notifications yet.</p>
+            ) : (
+              notifications.map((notification) => (
+                <div key={notification.id} className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-sm font-medium text-slate-950">{notification.type}</p>
+                  <p className="mt-1 text-sm text-slate-500">{new Date(notification.createdAt).toLocaleString()}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+        <Card className="space-y-4 p-5">
+          <SectionTitle title="Top cleaners" description="Performance by completion and incident-free work." />
+          <div className="space-y-4">
               {[
                 { name: "Alicia Gomez", score: "98%", meta: "12 completed this week" },
                 { name: "Kevin Brown", score: "96%", meta: "9 completed this week" },

@@ -10,6 +10,7 @@ export const dutyFormSchema = z.object({
   dueDate: z.string().optional().default(""),
   equipment: z.string().optional().default(""),
   referencePhotos: z.string().optional().default(""),
+  assignedUserIds: z.array(z.string().uuid()).optional().default([]),
 });
 
 export type DutyFormInput = z.input<typeof dutyFormSchema>;
