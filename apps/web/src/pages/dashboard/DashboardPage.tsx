@@ -1,4 +1,4 @@
-import { Bell, CalendarClock, ChartColumn, CircleAlert, ListTodo, Sparkles, UsersRound } from "lucide-react";
+import { Bell, CircleAlert, ListTodo, Sparkles } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { PageHeader } from "../../components/common/page-header";
@@ -8,6 +8,7 @@ import { StatCard } from "../../components/common/stat-card";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "../../hooks/use-session";
 import { listNotifications } from "../../services/notifications-service";
+import { useMemo } from "react";
 
 export function DashboardPage() {
   const { userId } = useSession();
@@ -17,8 +18,18 @@ export function DashboardPage() {
     enabled: Boolean(userId),
   });
 
+  const reportRows = useMemo(
+    () => [
+      { label: "Completion rate", value: 92, color: "bg-emerald-500" },
+      { label: "On-time duties", value: 87, color: "bg-sky-500" },
+      { label: "Open incidents", value: 14, color: "bg-amber-500" },
+      { label: "Cleaner coverage", value: 76, color: "bg-slate-900" },
+    ],
+    [],
+  );
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 fade-in">
       <PageHeader
         eyebrow="Dashboard"
         title="Good morning, Manager"
@@ -60,8 +71,8 @@ export function DashboardPage() {
 
         <div className="space-y-6">
           <QuickActions />
-        <Card className="space-y-4 p-5">
-          <SectionTitle title="Recent activity" description="Latest changes across the company." />
+          <Card className="space-y-4 p-5">
+            <SectionTitle title="Recent activity" description="Latest changes across the company." />
             <div className="space-y-4 text-sm">
               {[
                 { title: "Kevin completed Lobby deep clean", meta: "8 minutes ago" },
@@ -77,25 +88,25 @@ export function DashboardPage() {
                 </div>
               ))}
             </div>
-        </Card>
-        <Card className="space-y-4 p-5">
-          <SectionTitle title="Notifications" description="Unread alerts and duty updates." />
-          <div className="space-y-3">
-            {notifications.length === 0 ? (
-              <p className="text-sm text-slate-500">No notifications yet.</p>
-            ) : (
-              notifications.map((notification) => (
-                <div key={notification.id} className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-sm font-medium text-slate-950">{notification.type}</p>
-                  <p className="mt-1 text-sm text-slate-500">{new Date(notification.createdAt).toLocaleString()}</p>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-        <Card className="space-y-4 p-5">
-          <SectionTitle title="Top cleaners" description="Performance by completion and incident-free work." />
-          <div className="space-y-4">
+          </Card>
+          <Card className="space-y-4 p-5">
+            <SectionTitle title="Notifications" description="Unread alerts and duty updates." />
+            <div className="space-y-3">
+              {notifications.length === 0 ? (
+                <p className="text-sm text-slate-500">No notifications yet.</p>
+              ) : (
+                notifications.map((notification) => (
+                  <div key={notification.id} className="rounded-2xl bg-slate-50 p-4">
+                    <p className="text-sm font-medium text-slate-950">{notification.type}</p>
+                    <p className="mt-1 text-sm text-slate-500">{new Date(notification.createdAt).toLocaleString()}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+          <Card className="space-y-4 p-5">
+            <SectionTitle title="Top cleaners" description="Performance by completion and incident-free work." />
+            <div className="space-y-4">
               {[
                 { name: "Alicia Gomez", score: "98%", meta: "12 completed this week" },
                 { name: "Kevin Brown", score: "96%", meta: "9 completed this week" },
@@ -114,22 +125,41 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="p-5">
-          <p className="text-sm text-slate-500">Upcoming duties</p>
-          <p className="mt-2 text-2xl font-semibold">14</p>
-          <p className="mt-2 text-sm text-slate-500">Scheduled over the next 72 hours.</p>
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card className="space-y-4 p-5">
+          <SectionTitle title="Weekly reports" description="A quick operating view for managers and owners." />
+          <div className="space-y-4">
+            {reportRows.map((row) => (
+              <div key={row.label} className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-slate-700">{row.label}</span>
+                  <span className="text-slate-500">{row.value}%</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div className={`h-full rounded-full ${row.color}`} style={{ width: `${row.value}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
         </Card>
-        <Card className="p-5">
-          <p className="text-sm text-slate-500">Notifications</p>
-          <p className="mt-2 text-2xl font-semibold">7</p>
-          <p className="mt-2 text-sm text-slate-500">Unread across the current site.</p>
-        </Card>
-        <Card className="p-5">
-          <p className="text-sm text-slate-500">Today's coverage</p>
-          <p className="mt-2 text-2xl font-semibold">92%</p>
-          <p className="mt-2 text-sm text-slate-500">Active duty completion rate.</p>
-        </Card>
+
+        <div className="grid gap-6 sm:grid-cols-2">
+          <Card className="p-5">
+            <p className="text-sm text-slate-500">Upcoming duties</p>
+            <p className="mt-2 text-2xl font-semibold">14</p>
+            <p className="mt-2 text-sm text-slate-500">Scheduled over the next 72 hours.</p>
+          </Card>
+          <Card className="p-5">
+            <p className="text-sm text-slate-500">Notifications</p>
+            <p className="mt-2 text-2xl font-semibold">7</p>
+            <p className="mt-2 text-sm text-slate-500">Unread across the current site.</p>
+          </Card>
+          <Card className="p-5 sm:col-span-2">
+            <p className="text-sm text-slate-500">Today's coverage</p>
+            <p className="mt-2 text-2xl font-semibold">92%</p>
+            <p className="mt-2 text-sm text-slate-500">Active duty completion rate.</p>
+          </Card>
+        </div>
       </div>
     </div>
   );
