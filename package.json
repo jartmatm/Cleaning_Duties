@@ -1,0 +1,21 @@
+{
+  "name": "cleaning-duties",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "pnpm --filter @cleaning-duties/web dev",
+    "dev:api": "pnpm --filter @cleaning-duties/api dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r exec tsc --noEmit",
+    "start:api": "pnpm --filter @cleaning-duties/api start",
+    "start:web": "pnpm --filter @cleaning-duties/web start"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "typescript": "^5.8.3"
+  }
+}

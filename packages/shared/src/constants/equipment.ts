@@ -1,0 +1,15 @@
+export const EQUIPMENT_CHECKLIST = [
+  "Vacuum",
+  "Mop",
+  "Magic Sponge",
+  "Glass Cleaner",
+  "Squeegee",
+  "Applicator",
+  "Pressure Sprayer",
+  "Steam Cleaner",
+  "Bucket",
+  "Microfiber",
+  "Gloves",
+  "Safety Glasses",
+  "Extension Pole",
+] as const;

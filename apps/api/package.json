@@ -1,0 +1,22 @@
+{
+  "name": "@cleaning-duties/api",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@cleaning-duties/shared": "workspace:*",
+    "express": "^5.1.0",
+    "zod": "^4.0.17"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/server.js"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.15.29",
+    "tsx": "^4.20.5",
+    "typescript": "^5.8.3"
+  }
+}
