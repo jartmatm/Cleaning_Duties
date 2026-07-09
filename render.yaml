@@ -15,12 +15,15 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      - key: CORS_ORIGIN
+        sync: false
 
   - type: static
     name: cleaning-duties-web
     rootDir: .
     buildCommand: corepack enable && corepack pnpm install --frozen-lockfile && corepack pnpm --filter @cleaning-duties/web build
     staticPublishPath: apps/web/dist
+    pullRequestPreviewsEnabled: true
     envVars:
       - key: VITE_SUPABASE_URL
         sync: false
