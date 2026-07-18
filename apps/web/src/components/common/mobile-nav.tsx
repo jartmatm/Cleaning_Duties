@@ -4,7 +4,7 @@ import { navigationItems } from "../../constants/navigation";
 export function MobileNav() {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
-      <div className="mx-auto grid max-w-7xl grid-cols-4 gap-2">
+      <div className="mx-auto grid max-w-7xl gap-2" style={{ gridTemplateColumns: `repeat(${navigationItems.length}, minmax(0, 1fr))` }}>
         {navigationItems.map((item) => {
           const Icon = item.icon;
           return (

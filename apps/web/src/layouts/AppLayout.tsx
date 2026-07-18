@@ -9,16 +9,18 @@ import { useSession } from "../hooks/use-session";
 import { navigationItems } from "../constants/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { listSites } from "../services/sites-service";
+import { getCompanyPalette } from "../constants/company-palettes";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
-  const { email, role, companyId, companyName, activeSiteId, setActiveSiteId } = useSession();
+  const { email, role, companyId, companyName, companyLogoUrl, companyPalette, activeSiteId, setActiveSiteId } = useSession();
   const { data: sites = [] } = useQuery({
     queryKey: ["layout-sites", companyId],
     queryFn: () => listSites(companyId ?? ""),
     enabled: Boolean(companyId),
   });
   const activeSite = sites.find((site) => site.id === activeSiteId) ?? sites[0] ?? null;
+  const palette = getCompanyPalette(companyPalette);
 
   useEffect(() => {
     const firstSite = sites[0];
@@ -32,7 +34,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <div className="mx-auto flex min-h-screen max-w-7xl gap-6 px-4 py-4 pb-24 lg:px-6 lg:py-6 lg:pb-6">
         <aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-72 flex-col justify-between rounded-[2rem] bg-white p-6 shadow-sm ring-1 ring-slate-200 lg:flex">
           <div className="space-y-8">
-            <AppLogo title={companyName ?? "Cleaning Duties"} subtitle={activeSite?.name ?? "No site selected"} />
+            <AppLogo title={companyName ?? "Cleaning Duties"} subtitle={activeSite?.name ?? "No site selected"} logoUrl={companyLogoUrl} />
             <nav className="space-y-2 text-sm">
               {navigationItems.map((item) => {
                 const Icon = item.icon;
@@ -73,7 +75,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         <main className="flex-1 space-y-6 rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-200 lg:p-8">
           <div className="flex items-center justify-between gap-4 lg:hidden">
-            <AppLogo title={companyName ?? "Cleaning Duties"} subtitle={activeSite?.name ?? "No site selected"} />
+            <AppLogo title={companyName ?? "Cleaning Duties"} subtitle={activeSite?.name ?? "No site selected"} logoUrl={companyLogoUrl} />
             <Button
               variant="secondary"
               onClick={async () => {
@@ -92,10 +94,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
               sites={sites}
               onSelectSite={setActiveSiteId}
             />
-            <div className="rounded-[2rem] bg-slate-950 p-5 text-white">
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Current context</p>
+            <div className="rounded-[2rem] p-5 text-white" style={{ backgroundColor: palette.primary }}>
+              <p className="text-xs uppercase tracking-[0.35em] text-white/60">Current context</p>
               <p className="mt-3 text-2xl font-semibold tracking-tight">{activeSite?.name ?? "No active site"}</p>
-              <p className="mt-2 text-sm text-slate-300">
+              <p className="mt-2 text-sm text-white/75">
                 {sites.length > 0
                   ? `${sites.length} site${sites.length === 1 ? "" : "s"} available in this company`
                   : "Create a site to start assigning duties and cleaners."}

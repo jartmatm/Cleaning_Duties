@@ -6,15 +6,17 @@ import { AppLayout } from "../layouts/AppLayout";
 import { AuthLayout } from "../layouts/AuthLayout";
 import { DashboardPage } from "../pages/dashboard/DashboardPage";
 import { LoginPage } from "../pages/auth/LoginPage";
+import { ResetPasswordPage } from "../pages/auth/ResetPasswordPage";
 import { DutiesPage } from "../pages/duties/DutiesPage";
 import { SitesPage } from "../pages/sites/SitesPage";
 import { UsersPage } from "../pages/users/UsersPage";
 import { ProtectedRoute } from "../routes/protected-route";
 import { PublicRoute } from "../routes/public-route";
 import { getCurrentProfile } from "../services/profile-service";
-import { getCompanyName } from "../services/company-service";
+import { getCompanySettings } from "../services/company-service";
 import { supabase } from "../services/supabase-client";
 import { ToastViewport } from "../components/common/toast";
+import { SettingsPage } from "../pages/settings/SettingsPage";
 
 const queryClient = new QueryClient();
 
@@ -38,7 +40,7 @@ export function App() {
       }
 
       const profile = await getCurrentProfile(session.user.id);
-      const companyName = await getCompanyName(profile.company_id);
+      const company = await getCompanySettings(profile.company_id);
 
       if (!mounted) {
         return;
@@ -47,7 +49,9 @@ export function App() {
       setSession({
         userId: session.user.id,
         companyId: profile.company_id,
-        companyName,
+        companyName: company.name,
+        companyLogoUrl: company.logoUrl,
+        companyPalette: company.colorPalette,
         role: profile.role,
       });
       setEmail(session.user.email ?? session.user.phone ?? null);
@@ -71,7 +75,7 @@ export function App() {
 
       void (async () => {
         const profile = await getCurrentProfile(session.user.id);
-        const companyName = await getCompanyName(profile.company_id);
+        const company = await getCompanySettings(profile.company_id);
         if (!mounted) {
           return;
         }
@@ -79,7 +83,9 @@ export function App() {
         setSession({
           userId: session.user.id,
           companyId: profile.company_id,
-          companyName,
+          companyName: company.name,
+          companyLogoUrl: company.logoUrl,
+          companyPalette: company.colorPalette,
           role: profile.role,
         });
         setEmail(session.user.email ?? session.user.phone ?? null);
@@ -105,6 +111,14 @@ export function App() {
                   <LoginPage />
                 </AuthLayout>
               </PublicRoute>
+            }
+          />
+          <Route
+            path="/reset-password"
+            element={
+              <AuthLayout>
+                <ResetPasswordPage />
+              </AuthLayout>
             }
           />
           <Route
@@ -143,6 +157,16 @@ export function App() {
               <ProtectedRoute>
                 <AppLayout>
                   <UsersPage />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <SettingsPage />
                 </AppLayout>
               </ProtectedRoute>
             }

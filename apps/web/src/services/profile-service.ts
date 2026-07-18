@@ -21,3 +21,18 @@ export async function getCurrentProfile(userId: string) {
 
   return data;
 }
+
+export async function updateProfileName(userId: string, fullName: string) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({ full_name: fullName })
+    .eq("id", userId)
+    .select("id, company_id, full_name, phone, role")
+    .single<ProfileRecord>();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}

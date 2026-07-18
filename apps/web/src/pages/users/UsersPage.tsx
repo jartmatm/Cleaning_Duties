@@ -11,6 +11,7 @@ import { PageHeader } from "../../components/common/page-header";
 import { SectionTitle } from "../../components/common/section-title";
 import { notify } from "../../components/common/toast";
 import { listSites, type SiteItem } from "../../services/sites-service";
+import { listCompanyUsers } from "../../services/users-service";
 
 const inviteCleanerSchema = z.object({
   email: z.string().email("Enter a valid email."),
@@ -28,6 +29,16 @@ export function UsersPage() {
   const { data: sites = [] } = useQuery({
     queryKey: ["invite-sites", companyId],
     queryFn: () => listSites(companyId ?? ""),
+    enabled: Boolean(companyId),
+  });
+
+  const {
+    data: users = [],
+    isLoading: isLoadingUsers,
+    error: usersError,
+  } = useQuery({
+    queryKey: ["company-users", companyId],
+    queryFn: () => listCompanyUsers(companyId ?? ""),
     enabled: Boolean(companyId),
   });
 
@@ -71,6 +82,7 @@ export function UsersPage() {
         message: `${values.email} was added to the company and assigned to ${values.siteIds.length} site${values.siteIds.length === 1 ? "" : "s"}.`,
       });
       await queryClient.invalidateQueries({ queryKey: ["invite-sites", companyId] });
+      await queryClient.invalidateQueries({ queryKey: ["company-users", companyId] });
       setIsInviteOpen(false);
       form.reset();
     } catch (error) {
@@ -104,7 +116,7 @@ export function UsersPage() {
               disabled={!companyId}
             >
               <MailPlus className="h-4 w-4" />
-              Invite Cleaner
+              Add Cleaner
             </Button>
             <Button disabled>
               <UserRoundPlus className="h-4 w-4" />
@@ -119,7 +131,7 @@ export function UsersPage() {
           <Card className="w-full max-w-2xl space-y-6 p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-lg font-semibold text-slate-950">Invite cleaner</p>
+                <p className="text-lg font-semibold text-slate-950">Add cleaner</p>
                 <p className="mt-1 text-sm text-slate-500">
                   Create the account, set a password, and assign the cleaner to one or more sites.
                 </p>
@@ -217,26 +229,46 @@ export function UsersPage() {
       ) : null}
 
       <Card className="space-y-4 p-5">
-        <SectionTitle title="Team members" description="Role and invitation state across the company." />
+        <SectionTitle title="Cleaners" description="Active cleaners and the sites they can access." />
         <div className="grid gap-4 md:grid-cols-2">
-          {[
-            { name: "Alicia Gomez", role: "Manager", status: "Active" },
-            { name: "Kevin Brown", role: "Cleaner", status: "Pending invitation" },
-            { name: "Mia Patel", role: "Cleaner", status: "Active" },
-            { name: "Daniel Brooks", role: "Manager", status: "Active" },
-          ].map((user) => (
-            <div key={user.name} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="font-semibold text-slate-950">{user.name}</p>
-                  <p className="mt-1 text-sm text-slate-500">{user.role}</p>
+          {isLoadingUsers ? (
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 md:col-span-2">
+              Loading team members...
+            </div>
+          ) : usersError ? (
+            <div className="rounded-3xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700 md:col-span-2">
+              {usersError instanceof Error ? usersError.message : "Could not load team members."}
+            </div>
+          ) : users.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 md:col-span-2">
+              No team members found for this company.
+            </div>
+          ) : (
+            users.map((user) => (
+              <div key={user.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-slate-950">{user.name}</p>
+                    <p className="mt-1 text-sm text-slate-500">{user.role}</p>
+                  </div>
+                  <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                    {user.status}
+                  </div>
                 </div>
-                <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
-                  {user.status}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {user.siteNames.length > 0 ? (
+                    user.siteNames.map((siteName) => (
+                      <span key={siteName} className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+                        {siteName}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-slate-500">No sites assigned</span>
+                  )}
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </Card>
     </div>

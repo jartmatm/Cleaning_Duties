@@ -56,18 +56,19 @@ export async function listDutyAssignments(dutyId: string) {
 }
 
 export async function replaceDutyAssignments(dutyId: string, siteId: string, assignedUserIds: string[], assignedBy: string) {
+  const uniqueAssignedUserIds = Array.from(new Set(assignedUserIds));
   const { error: deleteError } = await supabase.from("duty_assignments").delete().eq("duty_id", dutyId);
 
   if (deleteError) {
     throw new Error(deleteError.message);
   }
 
-  if (assignedUserIds.length === 0) {
+  if (uniqueAssignedUserIds.length === 0) {
     return;
   }
 
   const { error: insertError } = await supabase.from("duty_assignments").insert(
-    assignedUserIds.map((profileId) => ({
+    uniqueAssignedUserIds.map((profileId) => ({
       duty_id: dutyId,
       profile_id: profileId,
       assigned_by: assignedBy,
@@ -86,7 +87,7 @@ export async function replaceDutyAssignments(dutyId: string, siteId: string, ass
     body: JSON.stringify({
       dutyId,
       siteId,
-      assignedUserIds,
+      assignedUserIds: uniqueAssignedUserIds,
       assignedBy,
     }),
   });

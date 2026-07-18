@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, MapPinned, SquareCheckBig, Users } from "lucide-react";
+import { LayoutDashboard, MapPinned, Settings, SquareCheckBig, Users } from "lucide-react";
 
 export type NavigationItem = {
   label: string;
@@ -12,4 +12,5 @@ export const navigationItems: NavigationItem[] = [
   { label: "Sites", to: "/sites", icon: MapPinned },
   { label: "Cleaning Duties", to: "/duties", icon: SquareCheckBig },
   { label: "Users", to: "/users", icon: Users },
+  { label: "Settings", to: "/settings", icon: Settings },
 ];

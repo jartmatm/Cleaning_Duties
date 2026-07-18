@@ -1,5 +1,6 @@
 import { Loader2, Plus, Search, Trash2, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,7 +17,8 @@ import { notify } from "../../components/common/toast";
 
 export function SitesPage() {
   const queryClient = useQueryClient();
-  const { companyId } = useSession();
+  const navigate = useNavigate();
+  const { companyId, setActiveSiteId } = useSession();
   const [search, setSearch] = useState("");
   const [editingSite, setEditingSite] = useState<SiteItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SiteItem | null>(null);
@@ -107,6 +109,11 @@ export function SitesPage() {
     }
 
     await createMutation.mutateAsync(values);
+  }
+
+  function openSiteDuties(siteId: string) {
+    setActiveSiteId(siteId);
+    navigate("/duties");
   }
 
   return (
@@ -246,21 +253,45 @@ export function SitesPage() {
           </Card>
         ) : (
           sites.map((site) => (
-            <Card key={site.id} className="space-y-4 p-5">
+            <Card
+              key={site.id}
+              role="button"
+              tabIndex={0}
+              className="group space-y-4 p-5 transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-xl hover:shadow-slate-200/70 focus:outline-none focus:ring-2 focus:ring-slate-300 active:translate-y-0"
+              onClick={() => openSiteDuties(site.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openSiteDuties(site.id);
+                }
+              }}
+            >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-lg font-semibold text-slate-950">{site.name}</p>
+                  <p className="text-lg font-semibold text-slate-950 transition group-hover:text-slate-700">{site.name}</p>
                   <p className="mt-1 text-sm text-slate-500">{site.address || "No address set"}</p>
                 </div>
                 <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">Active</div>
               </div>
               <p className="text-sm text-slate-600 line-clamp-3">{site.notes || "No notes."}</p>
               <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" onClick={() => startEdit(site)}>
+                <Button
+                  variant="secondary"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    startEdit(site);
+                  }}
+                >
                   <Pencil className="h-4 w-4" />
                   Edit
                 </Button>
-                <Button variant="ghost" onClick={() => setDeleteTarget(site)}>
+                <Button
+                  variant="ghost"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setDeleteTarget(site);
+                  }}
+                >
                   <Trash2 className="h-4 w-4" />
                   Delete
                 </Button>

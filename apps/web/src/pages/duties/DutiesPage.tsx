@@ -27,7 +27,7 @@ type ReferencePhotoItem = {
 
 export function DutiesPage() {
   const queryClient = useQueryClient();
-  const { companyId, userId } = useSession();
+  const { companyId, userId, activeSiteId: sessionActiveSiteId, setActiveSiteId: setSessionActiveSiteId } = useSession();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [search, setSearch] = useState("");
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export function DutiesPage() {
     enabled: Boolean(companyId),
   });
 
-  const activeSiteId = selectedSiteId ?? sites[0]?.id ?? null;
+  const activeSiteId = selectedSiteId ?? sessionActiveSiteId ?? sites[0]?.id ?? null;
   const activeSite = sites.find((site) => site.id === activeSiteId) ?? null;
   const activeBucketName = activeSite?.storageBucket || (activeSiteId ? `site-${activeSiteId}` : "");
 
@@ -128,6 +128,12 @@ export function DutiesPage() {
   });
 
   const dutyCount = useMemo(() => duties.length, [duties]);
+
+  useEffect(() => {
+    if (sessionActiveSiteId) {
+      setSelectedSiteId(sessionActiveSiteId);
+    }
+  }, [sessionActiveSiteId]);
 
   function startCreate() {
     setEditingDuty(null);
@@ -295,7 +301,11 @@ export function DutiesPage() {
             <label className="text-sm font-medium text-slate-700">Site</label>
             <select
               value={activeSiteId ?? ""}
-              onChange={(event) => setSelectedSiteId(event.target.value || null)}
+              onChange={(event) => {
+                const nextSiteId = event.target.value || null;
+                setSelectedSiteId(nextSiteId);
+                setSessionActiveSiteId(nextSiteId);
+              }}
               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
             >
               <option value="">Select a site</option>
