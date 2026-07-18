@@ -8,14 +8,27 @@ import { StatCard } from "../../components/common/stat-card";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "../../hooks/use-session";
 import { listNotifications } from "../../services/notifications-service";
+import { listDuties } from "../../services/duties-service";
 import { useMemo } from "react";
+import { listSites } from "../../services/sites-service";
 
 export function DashboardPage() {
-  const { userId } = useSession();
+  const { userId, companyId, companyName, activeSiteId } = useSession();
+  const { data: sites = [] } = useQuery({
+    queryKey: ["dashboard-sites", companyId],
+    queryFn: () => listSites(companyId ?? ""),
+    enabled: Boolean(companyId),
+  });
+  const activeSite = sites.find((site) => site.id === activeSiteId) ?? sites[0] ?? null;
   const { data: notifications = [] } = useQuery({
     queryKey: ["notifications", userId],
     queryFn: () => listNotifications(userId ?? ""),
     enabled: Boolean(userId),
+  });
+  const { data: duties = [] } = useQuery({
+    queryKey: ["dashboard-duties", activeSite?.id],
+    queryFn: () => listDuties(activeSite?.id ?? ""),
+    enabled: Boolean(activeSite?.id),
   });
 
   const reportRows = useMemo(
@@ -32,8 +45,12 @@ export function DashboardPage() {
     <div className="space-y-8 fade-in">
       <PageHeader
         eyebrow="Dashboard"
-        title="Good morning, Manager"
-        description="Track today's workload, monitor overdue duties, and move quickly from assignment to completion without losing context."
+        title={companyName ? `Good morning, ${companyName}` : "Good morning"}
+        description={
+          activeSite
+            ? `Track today's workload for ${activeSite.name}, monitor overdue duties, and move quickly from assignment to completion.`
+            : "Select a site to see workload, overdue duties, and live activity."
+        }
         actions={
           <>
             <Button variant="secondary">View Reports</Button>
@@ -43,9 +60,9 @@ export function DashboardPage() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Pending Duties" value="18" detail="5 due today, 3 overdue" accent={<ListTodo className="h-5 w-5" />} />
-        <StatCard label="Completed Today" value="42" detail="+12% vs yesterday" accent={<Sparkles className="h-5 w-5" />} />
-        <StatCard label="Overdue" value="3" detail="Needs manager review" accent={<CircleAlert className="h-5 w-5" />} />
+        <StatCard label="Pending Duties" value={String(duties.filter((duty) => duty.status !== "Completed").length)} detail="Across the selected site" accent={<ListTodo className="h-5 w-5" />} />
+        <StatCard label="Completed Today" value={String(duties.filter((duty) => duty.status === "Completed").length)} detail="For the active site" accent={<Sparkles className="h-5 w-5" />} />
+        <StatCard label="Overdue" value={String(duties.filter((duty) => duty.status === "Overdue").length)} detail="Needs manager review" accent={<CircleAlert className="h-5 w-5" />} />
         <StatCard label="Incidents" value="2" detail="Open this week" accent={<Bell className="h-5 w-5" />} />
       </div>
 
@@ -53,19 +70,22 @@ export function DashboardPage() {
         <Card className="space-y-6 p-5">
           <SectionTitle title="Today's duties" description="The highest priority work across the active site." />
           <div className="space-y-3">
-            {[
-              { title: "Lobby deep clean", meta: "High · Due 2:00 PM · Assigned to 2 cleaners" },
-              { title: "Kitchen sanitization", meta: "Medium · Due 4:30 PM · 1 cleaner" },
-              { title: "Restroom inspection", meta: "Urgent · Due ASAP · 3 cleaners" },
-            ].map((item) => (
-              <div key={item.title} className="flex flex-col gap-2 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="font-medium text-slate-950">{item.title}</p>
-                  <p className="mt-1 text-sm text-slate-500">{item.meta}</p>
+            {duties.length === 0 ? (
+              <p className="text-sm text-slate-500">No duties for this site yet.</p>
+            ) : (
+              duties.slice(0, 3).map((item) => (
+                <div key={item.id} className="flex flex-col gap-2 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="font-medium text-slate-950">{item.title}</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {item.priority} · {item.dueDate ? new Date(item.dueDate).toLocaleString() : "No due date"} · {item.assignedUserIds.length} cleaner
+                      {item.assignedUserIds.length === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <Button variant="secondary">Open</Button>
                 </div>
-                <Button variant="secondary">Open</Button>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Card>
 
@@ -77,7 +97,7 @@ export function DashboardPage() {
               {[
                 { title: "Kevin completed Lobby deep clean", meta: "8 minutes ago" },
                 { title: "Maria reported a broken glass incident", meta: "31 minutes ago" },
-                { title: "North Tower site updated", meta: "Today at 08:12" },
+                { title: "Site details updated", meta: "Today at 08:12" },
               ].map((entry) => (
                 <div key={entry.title} className="flex items-start gap-3">
                   <div className="mt-1 h-2.5 w-2.5 rounded-full bg-slate-900" />

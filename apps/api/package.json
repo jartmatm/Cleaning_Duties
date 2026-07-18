@@ -4,6 +4,7 @@
   "type": "module",
   "dependencies": {
     "@cleaning-duties/shared": "workspace:*",
+    "@supabase/supabase-js": "^2.39.0",
     "express": "^5.1.0",
     "zod": "^4.0.17"
   },

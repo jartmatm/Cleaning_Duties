@@ -12,7 +12,9 @@ import { UsersPage } from "../pages/users/UsersPage";
 import { ProtectedRoute } from "../routes/protected-route";
 import { PublicRoute } from "../routes/public-route";
 import { getCurrentProfile } from "../services/profile-service";
+import { getCompanyName } from "../services/company-service";
 import { supabase } from "../services/supabase-client";
+import { ToastViewport } from "../components/common/toast";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +38,7 @@ export function App() {
       }
 
       const profile = await getCurrentProfile(session.user.id);
+      const companyName = await getCompanyName(profile.company_id);
 
       if (!mounted) {
         return;
@@ -44,6 +47,7 @@ export function App() {
       setSession({
         userId: session.user.id,
         companyId: profile.company_id,
+        companyName,
         role: profile.role,
       });
       setEmail(session.user.email ?? session.user.phone ?? null);
@@ -67,6 +71,7 @@ export function App() {
 
       void (async () => {
         const profile = await getCurrentProfile(session.user.id);
+        const companyName = await getCompanyName(profile.company_id);
         if (!mounted) {
           return;
         }
@@ -74,6 +79,7 @@ export function App() {
         setSession({
           userId: session.user.id,
           companyId: profile.company_id,
+          companyName,
           role: profile.role,
         });
         setEmail(session.user.email ?? session.user.phone ?? null);
@@ -89,6 +95,7 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <ToastViewport />
         <Routes>
           <Route
             path="/login"

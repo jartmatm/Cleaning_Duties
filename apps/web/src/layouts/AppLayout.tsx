@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { AppLogo } from "../components/common/app-logo";
 import { MobileNav } from "../components/common/mobile-nav";
@@ -7,17 +7,32 @@ import { Button } from "../components/ui/button";
 import { signOut } from "../services/auth-service";
 import { useSession } from "../hooks/use-session";
 import { navigationItems } from "../constants/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { listSites } from "../services/sites-service";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
-  const { email, role } = useSession();
+  const { email, role, companyId, companyName, activeSiteId, setActiveSiteId } = useSession();
+  const { data: sites = [] } = useQuery({
+    queryKey: ["layout-sites", companyId],
+    queryFn: () => listSites(companyId ?? ""),
+    enabled: Boolean(companyId),
+  });
+  const activeSite = sites.find((site) => site.id === activeSiteId) ?? sites[0] ?? null;
+
+  useEffect(() => {
+    const firstSite = sites[0];
+    if (!activeSiteId && firstSite) {
+      setActiveSiteId(firstSite.id);
+    }
+  }, [activeSiteId, setActiveSiteId, sites]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-7xl gap-6 px-4 py-4 pb-24 lg:px-6 lg:py-6 lg:pb-6">
         <aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-72 flex-col justify-between rounded-[2rem] bg-white p-6 shadow-sm ring-1 ring-slate-200 lg:flex">
           <div className="space-y-8">
-            <AppLogo />
+            <AppLogo title={companyName ?? "Cleaning Duties"} subtitle={activeSite?.name ?? "No site selected"} />
             <nav className="space-y-2 text-sm">
               {navigationItems.map((item) => {
                 const Icon = item.icon;
@@ -58,7 +73,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         <main className="flex-1 space-y-6 rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-200 lg:p-8">
           <div className="flex items-center justify-between gap-4 lg:hidden">
-            <AppLogo />
+            <AppLogo title={companyName ?? "Cleaning Duties"} subtitle={activeSite?.name ?? "No site selected"} />
             <Button
               variant="secondary"
               onClick={async () => {
@@ -71,11 +86,20 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-            <SiteSwitcher />
+            <SiteSwitcher
+              companyName={companyName ?? "Cleaning Duties"}
+              activeSite={activeSite}
+              sites={sites}
+              onSelectSite={setActiveSiteId}
+            />
             <div className="rounded-[2rem] bg-slate-950 p-5 text-white">
               <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Current context</p>
-              <p className="mt-3 text-2xl font-semibold tracking-tight">North Tower</p>
-              <p className="mt-2 text-sm text-slate-300">12 cleaners · 4 managers · 18 duties due this week</p>
+              <p className="mt-3 text-2xl font-semibold tracking-tight">{activeSite?.name ?? "No active site"}</p>
+              <p className="mt-2 text-sm text-slate-300">
+                {sites.length > 0
+                  ? `${sites.length} site${sites.length === 1 ? "" : "s"} available in this company`
+                  : "Create a site to start assigning duties and cleaners."}
+              </p>
             </div>
           </div>
 

@@ -124,7 +124,7 @@ export async function createDuty(siteId: string, createdBy: string, values: Duty
   }
 
   const duty = mapDuty(data as DutyRow);
-  await replaceDutyAssignments(duty.id, payload.assignedUserIds, createdBy);
+  await replaceDutyAssignments(duty.id, siteId, payload.assignedUserIds, createdBy);
   return duty;
 }
 
@@ -150,7 +150,7 @@ export async function updateDuty(dutyId: string, values: DutyFormInput) {
   }
 
   const duty = mapDuty(data as DutyRow);
-  await replaceDutyAssignments(duty.id, payload.assignedUserIds, duty.createdBy);
+  await replaceDutyAssignments(duty.id, duty.siteId, payload.assignedUserIds, duty.createdBy);
   return duty;
 }
 

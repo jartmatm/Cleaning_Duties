@@ -1,4 +1,4 @@
-import { Plus, Search, Trash2, Pencil } from "lucide-react";
+import { Loader2, Plus, Search, Trash2, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -12,6 +12,7 @@ import { ConfirmationDialog } from "../../components/common/confirmation-dialog"
 import { Input } from "../../components/ui/input";
 import { createSite, deleteSite, listSites, type SiteItem, updateSite } from "../../services/sites-service";
 import { useSession } from "../../hooks/use-session";
+import { notify } from "../../components/common/toast";
 
 export function SitesPage() {
   const queryClient = useQueryClient();
@@ -47,6 +48,10 @@ export function SitesPage() {
       await queryClient.invalidateQueries({ queryKey: ["sites"] });
       form.reset();
       setShowCreate(false);
+      notify({ tone: "success", title: "Site created", message: "The new site was saved successfully." });
+    },
+    onError: (error) => {
+      notify({ tone: "error", title: "Could not create site", message: error instanceof Error ? error.message : "Unknown error" });
     },
   });
 
@@ -56,6 +61,10 @@ export function SitesPage() {
       await queryClient.invalidateQueries({ queryKey: ["sites"] });
       setEditingSite(null);
       form.reset();
+      notify({ tone: "success", title: "Site updated", message: "The site changes were saved successfully." });
+    },
+    onError: (error) => {
+      notify({ tone: "error", title: "Could not update site", message: error instanceof Error ? error.message : "Unknown error" });
     },
   });
 
@@ -64,10 +73,16 @@ export function SitesPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["sites"] });
       setDeleteTarget(null);
+      notify({ tone: "success", title: "Site deleted", message: "The site was removed successfully." });
+    },
+    onError: (error) => {
+      notify({ tone: "error", title: "Could not delete site", message: error instanceof Error ? error.message : "Unknown error" });
     },
   });
 
   const filteredCount = useMemo(() => sites.length, [sites]);
+  const topSite = sites[0] ?? null;
+  const atRiskSite = sites[1] ?? null;
 
   function startCreate() {
     setEditingSite(null);
@@ -102,13 +117,13 @@ export function SitesPage() {
         description="Manage the buildings, teams, and site-specific workstreams under one company."
         actions={
           <>
-            <Button variant="secondary" onClick={() => setSearch("")}>
+            <Button variant="secondary" onClick={() => setSearch("")} disabled={createMutation.isPending || updateMutation.isPending || deleteMutation.isPending}>
               <Search className="h-4 w-4" />
               Clear search
             </Button>
-            <Button onClick={startCreate}>
+            <Button onClick={startCreate} disabled={createMutation.isPending || updateMutation.isPending}>
               <Plus className="h-4 w-4" />
-              Create Site
+              {createMutation.isPending ? "Creating..." : "Create Site"}
             </Button>
           </>
         }
@@ -144,18 +159,22 @@ export function SitesPage() {
               title={editingSite ? `Edit ${editingSite.name}` : "Create site"}
               description="Use the site form to add a new building or update existing details."
             />
-            <Button variant="secondary" onClick={() => {
-              setShowCreate(false);
-              setEditingSite(null);
-              form.reset({ name: "", address: "", notes: "" });
-            }}>
-              Close
-            </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowCreate(false);
+                  setEditingSite(null);
+                  form.reset({ name: "", address: "", notes: "" });
+                }}
+                disabled={createMutation.isPending || updateMutation.isPending}
+              >
+                Close
+              </Button>
           </div>
           <form className="grid gap-4 lg:grid-cols-2" onSubmit={form.handleSubmit(onSubmit)}>
             <div className="space-y-2">
               <label className="text-sm font-medium">Site name</label>
-              <Input {...form.register("name")} placeholder="North Tower" />
+              <Input {...form.register("name")} placeholder="Enter site name" />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Address</label>
@@ -171,10 +190,27 @@ export function SitesPage() {
               />
             </div>
             <div className="flex gap-3 lg:col-span-2">
-              <Button type="submit">{editingSite ? "Save changes" : "Create site"}</Button>
+              <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                {createMutation.isPending && !editingSite ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : updateMutation.isPending && editingSite ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : editingSite ? (
+                  "Save changes"
+                ) : (
+                  "Create site"
+                )}
+              </Button>
               <Button
                 type="button"
                 variant="secondary"
+                disabled={createMutation.isPending || updateMutation.isPending}
                 onClick={() => {
                   setShowCreate(false);
                   setEditingSite(null);
@@ -196,7 +232,16 @@ export function SitesPage() {
             <p className="text-lg font-semibold text-slate-950">No sites yet</p>
             <p className="mt-2 text-sm text-slate-500">Create the first site to start organizing duties and cleaners.</p>
             <div className="mt-4">
-              <Button onClick={startCreate}>Create Site</Button>
+            <Button onClick={startCreate} disabled={createMutation.isPending || updateMutation.isPending}>
+                {createMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Site"
+                )}
+              </Button>
             </div>
           </Card>
         ) : (
@@ -230,15 +275,15 @@ export function SitesPage() {
         <div className="grid gap-4 md:grid-cols-3">
           <div className="rounded-2xl bg-slate-50 p-4">
             <p className="text-sm text-slate-500">Most active</p>
-            <p className="mt-2 font-semibold text-slate-950">North Tower</p>
+            <p className="mt-2 font-semibold text-slate-950">{topSite?.name ?? "No sites yet"}</p>
           </div>
           <div className="rounded-2xl bg-slate-50 p-4">
             <p className="text-sm text-slate-500">At risk</p>
-            <p className="mt-2 font-semibold text-slate-950">Sunset Offices</p>
+            <p className="mt-2 font-semibold text-slate-950">{atRiskSite?.name ?? "No sites yet"}</p>
           </div>
           <div className="rounded-2xl bg-slate-50 p-4">
             <p className="text-sm text-slate-500">New this month</p>
-            <p className="mt-2 font-semibold text-slate-950">2 sites</p>
+            <p className="mt-2 font-semibold text-slate-950">{sites.length} site{sites.length === 1 ? "" : "s"}</p>
           </div>
         </div>
       </Card>

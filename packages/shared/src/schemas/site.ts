@@ -6,6 +6,7 @@ export const siteSchema = z.object({
   name: z.string().min(1).max(120),
   address: z.string().max(240).nullable().optional(),
   notes: z.string().max(1000).default(""),
+  storageBucket: z.string().min(1).max(120).optional().default(""),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

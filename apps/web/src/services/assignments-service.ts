@@ -1,4 +1,5 @@
 import { supabase } from "./supabase-client";
+import { apiUrl } from "./api-client";
 
 export type SiteMemberRow = {
   profile_id: string;
@@ -54,7 +55,7 @@ export async function listDutyAssignments(dutyId: string) {
   }));
 }
 
-export async function replaceDutyAssignments(dutyId: string, assignedUserIds: string[], assignedBy: string) {
+export async function replaceDutyAssignments(dutyId: string, siteId: string, assignedUserIds: string[], assignedBy: string) {
   const { error: deleteError } = await supabase.from("duty_assignments").delete().eq("duty_id", dutyId);
 
   if (deleteError) {
@@ -75,5 +76,23 @@ export async function replaceDutyAssignments(dutyId: string, assignedUserIds: st
 
   if (insertError) {
     throw new Error(insertError.message);
+  }
+
+  const response = await fetch(apiUrl("/duty-notifications/assignments"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      dutyId,
+      siteId,
+      assignedUserIds,
+      assignedBy,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    console.warn("Duty notification request failed", text);
   }
 }
