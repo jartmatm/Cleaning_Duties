@@ -7,7 +7,23 @@ import { errorHandler } from "./middleware/error-handler";
 
 export function createServer() {
   const app = express();
+  const allowedOrigin = process.env.CORS_ORIGIN;
 
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && (!allowedOrigin || origin === allowedOrigin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+    }
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(204);
+    }
+
+    return next();
+  });
   app.use(express.json());
   app.use("/health", healthRouter);
   app.use("/invite", inviteRouter);

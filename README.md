@@ -14,3 +14,10 @@ Create `apps/web/.env.local` with:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `VITE_API_BASE_URL`
+
+Run `apps/api` with:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `CORS_ORIGIN` optional, for example `http://localhost:5173`

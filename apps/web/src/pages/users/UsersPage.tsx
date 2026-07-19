@@ -10,16 +10,54 @@ import { Card } from "../../components/ui/card";
 import { PageHeader } from "../../components/common/page-header";
 import { SectionTitle } from "../../components/common/section-title";
 import { notify } from "../../components/common/toast";
+import { apiUrl } from "../../services/api-client";
 import { listSites, type SiteItem } from "../../services/sites-service";
 import { listCompanyUsers } from "../../services/users-service";
 
 const inviteCleanerSchema = z.object({
+  fullName: z.string().trim().min(2, "Enter the cleaner name."),
   email: z.string().email("Enter a valid email."),
   password: z.string().min(8, "Password must be at least 8 characters."),
   siteIds: z.array(z.string()).min(1, "Select at least one site."),
 });
 
 type InviteCleanerInput = z.infer<typeof inviteCleanerSchema>;
+
+function stringifyUnknown(value: unknown) {
+  if (typeof value === "string") {
+    return value;
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function getInviteErrorMessage(body: unknown, response: Response) {
+  if (!body || typeof body !== "object") {
+    return `Invite failed (${response.status}) at ${response.url}`;
+  }
+
+  const error = (body as { error?: unknown }).error;
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+  if (error && typeof error === "object") {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+    return `Invite failed (${response.status}) at ${response.url}: ${stringifyUnknown(error)}`;
+  }
+
+  const message = (body as { message?: unknown }).message;
+  if (typeof message === "string" && message.trim()) {
+    return message;
+  }
+
+  return `Invite failed (${response.status}) at ${response.url}: ${stringifyUnknown(body)}`;
+}
 
 export function UsersPage() {
   const queryClient = useQueryClient();
@@ -45,6 +83,7 @@ export function UsersPage() {
   const form = useForm<InviteCleanerInput>({
     resolver: zodResolver(inviteCleanerSchema),
     defaultValues: {
+      fullName: "",
       email: "",
       password: "",
       siteIds: [],
@@ -59,10 +98,11 @@ export function UsersPage() {
 
   async function onSubmit(values: InviteCleanerInput) {
     try {
-      const response = await fetch("/invite", {
+      const response = await fetch(apiUrl("/invite"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          full_name: values.fullName,
           email: values.email,
           password: values.password,
           role: "Cleaner",
@@ -71,9 +111,10 @@ export function UsersPage() {
         }),
       });
 
-      const body = (await response.json()) as { error?: string };
+      const contentType = response.headers.get("content-type") ?? "";
+      const body = contentType.includes("application/json") ? await response.json() : { error: await response.text() };
       if (!response.ok) {
-        throw new Error(body.error ?? "Invite failed");
+        throw new Error(getInviteErrorMessage(body, response));
       }
 
       notify({
@@ -86,10 +127,16 @@ export function UsersPage() {
       setIsInviteOpen(false);
       form.reset();
     } catch (error) {
+      const message =
+        error instanceof TypeError
+          ? `Could not connect to the API at ${apiUrl("/invite")}. Make sure apps/api is running.`
+          : error instanceof Error
+            ? error.message
+            : stringifyUnknown(error);
       notify({
         tone: "error",
         title: "Invite failed",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message,
       });
     }
   }
@@ -151,6 +198,17 @@ export function UsersPage() {
 
             <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)}>
               <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium text-slate-700">Cleaner name</label>
+                  <input
+                    type="text"
+                    {...form.register("fullName")}
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400"
+                    placeholder="Full name"
+                  />
+                  {form.formState.errors.fullName ? <p className="text-sm text-rose-600">{form.formState.errors.fullName.message}</p> : null}
+                </div>
+
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium text-slate-700">Email</label>
                   <input
