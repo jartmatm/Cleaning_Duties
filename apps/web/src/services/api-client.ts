@@ -4,7 +4,7 @@ export const apiBaseUrl = rawBaseUrl?.trim() || (import.meta.env.DEV ? "http://l
 
 export function apiUrl(path: string) {
   if (!apiBaseUrl) {
-    return path;
+    throw new Error("VITE_API_BASE_URL is not configured. Set it to the deployed API URL.");
   }
 
   return `${apiBaseUrl.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;

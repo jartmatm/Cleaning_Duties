@@ -16,7 +16,7 @@ import { getCurrentProfile, updateProfileName } from "../../services/profile-ser
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const { userId, companyId, setCompanyBranding } = useSession();
+  const { userId, companyId, role, setCompanyBranding } = useSession();
   const [companyName, setCompanyName] = useState("");
   const [managerName, setManagerName] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -25,11 +25,12 @@ export function SettingsPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const isCleaner = role === "Cleaner";
 
   const { data: company, isLoading: isLoadingCompany } = useQuery({
     queryKey: ["company-settings", companyId],
     queryFn: () => getCompanySettings(companyId ?? ""),
-    enabled: Boolean(companyId),
+    enabled: Boolean(companyId) && !isCleaner,
   });
 
   const { data: profile, isLoading: isLoadingProfile } = useQuery({
@@ -70,15 +71,21 @@ export function SettingsPage() {
         throw new Error("Missing settings context");
       }
 
-      const trimmedCompanyName = companyName.trim();
       const trimmedManagerName = managerName.trim();
+
+      if (!trimmedManagerName) {
+        throw new Error("Name is required");
+      }
+
+      if (isCleaner) {
+        await updateProfileName(userId, trimmedManagerName);
+        return null;
+      }
+
+      const trimmedCompanyName = companyName.trim();
 
       if (!trimmedCompanyName) {
         throw new Error("Company name is required");
-      }
-
-      if (!trimmedManagerName) {
-        throw new Error("Manager name is required");
       }
 
       const uploadedLogoUrl = logoFile ? await uploadCompanyLogo(companyId, logoFile) : logoUrl;
@@ -92,17 +99,23 @@ export function SettingsPage() {
       return updatedCompany;
     },
     onSuccess: async (updatedCompany) => {
-      setCompanyBranding({
-        companyName: updatedCompany.name,
-        companyLogoUrl: updatedCompany.logoUrl,
-        companyPalette: updatedCompany.colorPalette,
-      });
-      setLogoFile(null);
-      setLogoPreviewUrl(null);
-      setLogoUrl(updatedCompany.logoUrl);
-      await queryClient.invalidateQueries({ queryKey: ["company-settings", companyId] });
+      if (updatedCompany) {
+        setCompanyBranding({
+          companyName: updatedCompany.name,
+          companyLogoUrl: updatedCompany.logoUrl,
+          companyPalette: updatedCompany.colorPalette,
+        });
+        setLogoFile(null);
+        setLogoPreviewUrl(null);
+        setLogoUrl(updatedCompany.logoUrl);
+        await queryClient.invalidateQueries({ queryKey: ["company-settings", companyId] });
+      }
       await queryClient.invalidateQueries({ queryKey: ["manager-profile", userId] });
-      notify({ tone: "success", title: "Settings saved", message: "Company settings were updated successfully." });
+      notify({
+        tone: "success",
+        title: "Settings saved",
+        message: isCleaner ? "Your profile was updated successfully." : "Company settings were updated successfully.",
+      });
     },
     onError: (error) => {
       notify({ tone: "error", title: "Could not save settings", message: error instanceof Error ? error.message : "Unknown error" });
@@ -159,20 +172,27 @@ export function SettingsPage() {
     }
   }
 
-  const isLoading = isLoadingCompany || isLoadingProfile;
+  const isLoading = (!isCleaner && isLoadingCompany) || isLoadingProfile;
   const displayedLogoUrl = logoPreviewUrl ?? logoUrl;
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Settings"
-        title="Company settings"
-        description="Manage the company identity, manager profile, and brand palette used across the workspace."
+        title={isCleaner ? "Profile settings" : "Company settings"}
+        description={
+          isCleaner
+            ? "Update your personal details and account password."
+            : "Manage the company identity, manager profile, and brand palette used across the workspace."
+        }
       />
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_0.7fr]">
+      <div className={isCleaner ? "grid gap-6" : "grid gap-6 xl:grid-cols-[1fr_0.7fr]"}>
         <Card className="space-y-6 p-5">
-          <SectionTitle title="Company profile" description="Update the core details cleaners and managers see in the app." />
+          <SectionTitle
+            title={isCleaner ? "Personal profile" : "Company profile"}
+            description={isCleaner ? "Update the name shown on your cleaner account." : "Update the core details cleaners and managers see in the app."}
+          />
 
           {isLoading ? (
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">Loading settings...</div>
@@ -184,63 +204,69 @@ export function SettingsPage() {
                 saveMutation.mutate();
               }}
             >
-              <div className="grid gap-4 md:grid-cols-[auto_1fr] md:items-center">
-                <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-50">
-                  {displayedLogoUrl ? (
-                    <img src={displayedLogoUrl} alt={`${companyName} logo`} className="h-full w-full object-cover" />
-                  ) : (
-                    <span className="text-2xl font-semibold text-slate-400">{companyName.slice(0, 1) || "C"}</span>
-                  )}
+              {!isCleaner ? (
+                <div className="grid gap-4 md:grid-cols-[auto_1fr] md:items-center">
+                  <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-50">
+                    {displayedLogoUrl ? (
+                      <img src={displayedLogoUrl} alt={`${companyName} logo`} className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-2xl font-semibold text-slate-400">{companyName.slice(0, 1) || "C"}</span>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
+                    <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()} disabled={saveMutation.isPending}>
+                      <ImageUp className="h-4 w-4" />
+                      Upload logo
+                    </Button>
+                    <p className="text-sm text-slate-500">Square PNG or JPG works best.</p>
+                  </div>
                 </div>
-                <div className="space-y-3">
-                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
-                  <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()} disabled={saveMutation.isPending}>
-                    <ImageUp className="h-4 w-4" />
-                    Upload logo
-                  </Button>
-                  <p className="text-sm text-slate-500">Square PNG or JPG works best.</p>
-                </div>
-              </div>
+              ) : null}
 
               <div className="grid gap-4 md:grid-cols-2">
+                {!isCleaner ? (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Company name</label>
+                    <Input value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="Company name" />
+                  </div>
+                ) : null}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Company name</label>
-                  <Input value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="Company name" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Manager name</label>
-                  <Input value={managerName} onChange={(event) => setManagerName(event.target.value)} placeholder="Manager name" />
+                  <label className="text-sm font-medium text-slate-700">{isCleaner ? "Name" : "Manager name"}</label>
+                  <Input value={managerName} onChange={(event) => setManagerName(event.target.value)} placeholder={isCleaner ? "Your name" : "Manager name"} />
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-slate-700">Company palette</label>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {companyPalettes.map((palette) => {
-                    const isSelected = selectedPalette === palette.id;
-                    return (
-                      <button
-                        key={palette.id}
-                        type="button"
-                        onClick={() => setSelectedPalette(palette.id)}
-                        className={`rounded-3xl border p-4 text-left transition ${
-                          isSelected ? "border-slate-900 bg-white shadow-sm" : "border-slate-200 bg-slate-50 hover:bg-white"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm font-semibold text-slate-950">{palette.name}</span>
-                          {isSelected ? <Check className="h-4 w-4 text-slate-900" /> : null}
-                        </div>
-                        <div className="mt-4 flex gap-2">
-                          {[palette.primary, palette.accent, palette.surface, palette.text].map((color) => (
-                            <span key={color} className="h-8 flex-1 rounded-2xl ring-1 ring-black/5" style={{ backgroundColor: color }} />
-                          ))}
-                        </div>
-                      </button>
-                    );
-                  })}
+              {!isCleaner ? (
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-slate-700">Company palette</label>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {companyPalettes.map((palette) => {
+                      const isSelected = selectedPalette === palette.id;
+                      return (
+                        <button
+                          key={palette.id}
+                          type="button"
+                          onClick={() => setSelectedPalette(palette.id)}
+                          className={`rounded-3xl border p-4 text-left transition ${
+                            isSelected ? "border-slate-900 bg-white shadow-sm" : "border-slate-200 bg-slate-50 hover:bg-white"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-semibold text-slate-950">{palette.name}</span>
+                            {isSelected ? <Check className="h-4 w-4 text-slate-900" /> : null}
+                          </div>
+                          <div className="mt-4 flex gap-2">
+                            {[palette.primary, palette.accent, palette.surface, palette.text].map((color) => (
+                              <span key={color} className="h-8 flex-1 rounded-2xl ring-1 ring-black/5" style={{ backgroundColor: color }} />
+                            ))}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
               <div className="flex flex-wrap justify-end gap-3">
                 <Button type="button" variant="secondary" onClick={resetForm} disabled={saveMutation.isPending}>
@@ -256,36 +282,38 @@ export function SettingsPage() {
           )}
         </Card>
 
-        <Card className="space-y-5 p-5" style={{ backgroundColor: activePalette.surface }}>
-          <SectionTitle title="Brand preview" description="A quick look at the selected identity." />
-          <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-black/5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl" style={{ backgroundColor: activePalette.primary }}>
-                {displayedLogoUrl ? (
-                  <img src={displayedLogoUrl} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <span className="font-semibold text-white">{companyName.slice(0, 1) || "C"}</span>
-                )}
+        {!isCleaner ? (
+          <Card className="space-y-5 p-5" style={{ backgroundColor: activePalette.surface }}>
+            <SectionTitle title="Brand preview" description="A quick look at the selected identity." />
+            <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-black/5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl" style={{ backgroundColor: activePalette.primary }}>
+                  {displayedLogoUrl ? (
+                    <img src={displayedLogoUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="font-semibold text-white">{companyName.slice(0, 1) || "C"}</span>
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: activePalette.text }}>
+                    {companyName || "Company"}
+                  </p>
+                  <p className="text-xs text-slate-500">{managerName || "Manager"}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-semibold" style={{ color: activePalette.text }}>
-                  {companyName || "Company"}
-                </p>
-                <p className="text-xs text-slate-500">{managerName || "Manager"}</p>
+              <div className="mt-5 rounded-2xl px-4 py-3 text-sm font-medium text-white" style={{ backgroundColor: activePalette.primary }}>
+                Active palette: {activePalette.name}
+              </div>
+              <div className="mt-3 rounded-2xl px-4 py-3 text-sm font-medium" style={{ backgroundColor: activePalette.accent, color: activePalette.text }}>
+                Site operations
               </div>
             </div>
-            <div className="mt-5 rounded-2xl px-4 py-3 text-sm font-medium text-white" style={{ backgroundColor: activePalette.primary }}>
-              Active palette: {activePalette.name}
-            </div>
-            <div className="mt-3 rounded-2xl px-4 py-3 text-sm font-medium" style={{ backgroundColor: activePalette.accent, color: activePalette.text }}>
-              Site operations
-            </div>
-          </div>
-        </Card>
+          </Card>
+        ) : null}
       </div>
 
       <Card className="space-y-5 p-5">
-        <SectionTitle title="Password" description="Update the password for the current signed-in manager." />
+        <SectionTitle title="Password" description="Update the password for the current signed-in user." />
         <form
           className="grid gap-4 md:grid-cols-2"
           onSubmit={(event) => {

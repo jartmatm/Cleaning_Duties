@@ -14,12 +14,13 @@ export async function uploadDutyReferencePhotos(params: {
   siteId: string;
   dutyTitle: string;
   files: File[];
+  folder?: string;
 }) {
   const uploadedUrls: string[] = [];
 
   for (const file of params.files) {
     const fileName = `${safeSegment(params.dutyTitle || "duty")}-${crypto.randomUUID()}.${fileExtension(file.name)}`;
-    const storagePath = `${safeSegment(params.siteId)}/reference/${Date.now()}-${fileName}`;
+    const storagePath = `${safeSegment(params.siteId)}/${safeSegment(params.folder ?? "reference")}/${Date.now()}-${fileName}`;
     const { error } = await supabase.storage.from(params.bucketName).upload(storagePath, file, {
       cacheControl: "3600",
       upsert: false,
@@ -35,6 +36,22 @@ export async function uploadDutyReferencePhotos(params: {
   }
 
   return uploadedUrls;
+}
+
+export async function uploadDutyEvidencePhotos(params: {
+  bucketName: string;
+  siteId: string;
+  dutyTitle: string;
+  files: File[];
+  type: "before" | "after";
+}) {
+  return uploadDutyReferencePhotos({
+    bucketName: params.bucketName,
+    siteId: params.siteId,
+    dutyTitle: params.dutyTitle,
+    files: params.files,
+    folder: params.type,
+  });
 }
 
 export async function uploadDutyReferencePhoto(params: {

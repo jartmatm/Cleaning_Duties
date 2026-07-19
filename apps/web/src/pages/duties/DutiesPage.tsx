@@ -91,6 +91,8 @@ export function DutiesPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["duties"] });
+      await queryClient.invalidateQueries({ queryKey: ["cleaner-assigned-duties"] });
+      await queryClient.refetchQueries({ queryKey: ["duties", activeSiteId, search] });
       setShowCreate(false);
       setReferencePhotoItems([]);
       form.reset();
@@ -105,6 +107,8 @@ export function DutiesPage() {
     mutationFn: ({ dutyId, values }: { dutyId: string; values: DutyFormInput }) => updateDuty(dutyId, values),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["duties"] });
+      await queryClient.invalidateQueries({ queryKey: ["cleaner-assigned-duties"] });
+      await queryClient.refetchQueries({ queryKey: ["duties", activeSiteId, search] });
       setEditingDuty(null);
       setReferencePhotoItems([]);
       form.reset();
@@ -119,6 +123,8 @@ export function DutiesPage() {
     mutationFn: deleteDuty,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["duties"] });
+      await queryClient.invalidateQueries({ queryKey: ["cleaner-assigned-duties"] });
+      await queryClient.refetchQueries({ queryKey: ["duties", activeSiteId, search] });
       setDeleteTarget(null);
       notify({ tone: "success", title: "Duty deleted", message: "The duty was removed successfully." });
     },

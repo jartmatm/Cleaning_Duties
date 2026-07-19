@@ -16,6 +16,8 @@ export type DutyRow = {
   equipment: string[];
   reference_photos: string[];
   completion_photos: string[];
+  before_photos: string[];
+  after_photos: string[];
   created_at: string;
   updated_at: string;
 };
@@ -34,6 +36,8 @@ export type DutyItem = {
   equipment: string[];
   referencePhotos: string[];
   completionPhotos: string[];
+  beforePhotos: string[];
+  afterPhotos: string[];
   assignedUserIds: string[];
   createdAt: string;
   updatedAt: string;
@@ -54,6 +58,8 @@ function mapDuty(row: DutyRow): DutyItem {
     equipment: row.equipment,
     referencePhotos: row.reference_photos,
     completionPhotos: row.completion_photos,
+    beforePhotos: row.before_photos ?? [],
+    afterPhotos: row.after_photos ?? [],
     assignedUserIds: [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -85,7 +91,7 @@ function toFormInput(values: DutyFormInput) {
 export async function listDuties(siteId: string, search = "") {
   let query = supabase
     .from("cleaning_duties")
-    .select("id, site_id, created_by, title, description, priority, status, due_date, recurring, recurring_rule, equipment, reference_photos, completion_photos, created_at, updated_at")
+    .select("id, site_id, created_by, title, description, priority, status, due_date, recurring, recurring_rule, equipment, reference_photos, completion_photos, before_photos, after_photos, created_at, updated_at")
     .eq("site_id", siteId);
 
   if (search.trim()) {
@@ -99,6 +105,25 @@ export async function listDuties(siteId: string, search = "") {
   }
 
   return (data ?? []).map((row) => mapDuty(row as DutyRow));
+}
+
+export async function listAssignedDuties(profileId: string) {
+  const { data, error } = await supabase
+    .from("duty_assignments")
+    .select(
+      "profile_id, cleaning_duties(id, site_id, created_by, title, description, priority, status, due_date, recurring, recurring_rule, equipment, reference_photos, completion_photos, before_photos, after_photos, created_at, updated_at)",
+    )
+    .eq("profile_id", profileId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? [])
+    .map((row) => (row as unknown as { cleaning_duties: DutyRow | null }).cleaning_duties)
+    .filter((row): row is DutyRow => row !== null)
+    .map((row) => ({ ...mapDuty(row), assignedUserIds: [profileId] }))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 export async function createDuty(siteId: string, createdBy: string, values: DutyFormInput) {
@@ -116,7 +141,7 @@ export async function createDuty(siteId: string, createdBy: string, values: Duty
       equipment: payload.equipment,
       reference_photos: payload.reference_photos,
     })
-    .select("id, site_id, created_by, title, description, priority, status, due_date, recurring, recurring_rule, equipment, reference_photos, completion_photos, created_at, updated_at")
+    .select("id, site_id, created_by, title, description, priority, status, due_date, recurring, recurring_rule, equipment, reference_photos, completion_photos, before_photos, after_photos, created_at, updated_at")
     .single();
 
   if (error) {
@@ -142,7 +167,7 @@ export async function updateDuty(dutyId: string, values: DutyFormInput) {
       reference_photos: payload.reference_photos,
     })
     .eq("id", dutyId)
-    .select("id, site_id, created_by, title, description, priority, status, due_date, recurring, recurring_rule, equipment, reference_photos, completion_photos, created_at, updated_at")
+    .select("id, site_id, created_by, title, description, priority, status, due_date, recurring, recurring_rule, equipment, reference_photos, completion_photos, before_photos, after_photos, created_at, updated_at")
     .single();
 
   if (error) {
@@ -154,10 +179,61 @@ export async function updateDuty(dutyId: string, values: DutyFormInput) {
   return duty;
 }
 
-export async function deleteDuty(dutyId: string) {
-  const { error } = await supabase.from("cleaning_duties").delete().eq("id", dutyId);
+export async function updateDutyStatus(dutyId: string, status: DutyRow["status"]) {
+  const { data, error } = await supabase
+    .from("cleaning_duties")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", dutyId)
+    .select("id, site_id, created_by, title, description, priority, status, due_date, recurring, recurring_rule, equipment, reference_photos, completion_photos, before_photos, after_photos, created_at, updated_at")
+    .single();
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  return mapDuty(data as DutyRow);
+}
+
+export async function appendDutyEvidencePhotos(params: {
+  dutyId: string;
+  beforePhotos?: string[];
+  afterPhotos?: string[];
+}) {
+  const { data: current, error: currentError } = await supabase
+    .from("cleaning_duties")
+    .select("before_photos, after_photos")
+    .eq("id", params.dutyId)
+    .single();
+
+  if (currentError) {
+    throw new Error(currentError.message);
+  }
+
+  const beforePhotos = [...((current as { before_photos: string[] | null }).before_photos ?? []), ...(params.beforePhotos ?? [])];
+  const afterPhotos = [...((current as { after_photos: string[] | null }).after_photos ?? []), ...(params.afterPhotos ?? [])];
+
+  const { data, error } = await supabase
+    .from("cleaning_duties")
+    .update({ before_photos: beforePhotos, after_photos: afterPhotos, updated_at: new Date().toISOString() })
+    .eq("id", params.dutyId)
+    .select("id, site_id, created_by, title, description, priority, status, due_date, recurring, recurring_rule, equipment, reference_photos, completion_photos, before_photos, after_photos, created_at, updated_at")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapDuty(data as DutyRow);
+}
+
+export async function deleteDuty(dutyId: string) {
+  const { data, error } = await supabase.from("cleaning_duties").delete().eq("id", dutyId).select("id").maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error("Duty was not deleted. Check that your account has manager permissions for this site.");
   }
 }
