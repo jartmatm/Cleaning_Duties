@@ -112,7 +112,7 @@ export function LoginPage() {
             </button>
           </div>
           {errorMessage ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</p> : null}
-          <Button className="w-full bg-slate-950 text-white shadow-lg shadow-slate-950/20 hover:bg-slate-800" disabled={isSubmitting}>
+          <Button className="w-full !bg-slate-950 !text-white shadow-lg shadow-slate-950/20 hover:!bg-slate-800" disabled={isSubmitting}>
             {isSubmitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
