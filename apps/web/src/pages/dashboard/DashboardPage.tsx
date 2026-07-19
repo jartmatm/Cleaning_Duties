@@ -1,20 +1,20 @@
 import { INCIDENT_TYPES, type IncidentType } from "@cleaning-duties/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Camera, CheckCircle2, CircleAlert, ClipboardList, ListTodo, Loader2, Send, Sparkles, X } from "lucide-react";
-import { useMemo, useState, type ChangeEvent } from "react";
+import { Bell, CheckCircle2, CircleAlert, ClipboardList, ListTodo, Loader2, Send, Sparkles, X } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
+import { CleanerDutyDetailModal } from "../../components/common/cleaner-duty-detail-modal";
 import { PageHeader } from "../../components/common/page-header";
 import { QuickActions } from "../../components/common/quick-actions";
 import { SectionTitle } from "../../components/common/section-title";
 import { StatCard } from "../../components/common/stat-card";
 import { notify } from "../../components/common/toast";
 import { useSession } from "../../hooks/use-session";
-import { uploadDutyEvidencePhotos } from "../../services/duty-photo-service";
-import { appendDutyEvidencePhotos, listAssignedDuties, listDuties, updateDutyStatus, type DutyItem } from "../../services/duties-service";
+import { listAssignedDuties, listDuties, updateDutyStatus, type DutyItem } from "../../services/duties-service";
 import { createIncident, listIncidentsForReporter } from "../../services/incidents-service";
 import { listNotifications } from "../../services/notifications-service";
-import { listSites, type SiteItem } from "../../services/sites-service";
+import { listMySites, listSites, type SiteItem } from "../../services/sites-service";
 
 type CleanerFilter = "pending" | "in-progress" | "completed" | "incidents";
 
@@ -147,17 +147,18 @@ function ManagerDashboard() {
 
 function CleanerDashboard() {
   const queryClient = useQueryClient();
-  const { userId, companyId, companyName } = useSession();
+  const { userId, companyName, activeSiteId } = useSession();
   const [activeFilter, setActiveFilter] = useState<CleanerFilter>("pending");
   const [selectedDuty, setSelectedDuty] = useState<DutyItem | null>(null);
   const [isIncidentOpen, setIsIncidentOpen] = useState(false);
 
   const { data: sites = [] } = useQuery({
-    queryKey: ["cleaner-sites", companyId],
-    queryFn: () => listSites(companyId ?? ""),
-    enabled: Boolean(companyId),
+    queryKey: ["cleaner-sites", userId],
+    queryFn: () => listMySites(userId ?? ""),
+    enabled: Boolean(userId),
   });
   const siteById = useMemo(() => new Map(sites.map((site) => [site.id, site])), [sites]);
+  const activeSite = sites.find((site) => site.id === activeSiteId) ?? sites[0] ?? null;
 
   const { data: duties = [], isLoading: isLoadingDuties } = useQuery({
     queryKey: ["cleaner-assigned-duties", userId],
@@ -186,38 +187,48 @@ function CleanerDashboard() {
   });
 
   const displayedDuties = useMemo(() => {
+    const siteDuties = activeSite ? duties.filter((duty) => duty.siteId === activeSite.id) : duties;
     if (activeFilter === "pending") {
-      return duties.filter(isPendingDuty);
+      return siteDuties.filter(isPendingDuty);
     }
     if (activeFilter === "in-progress") {
-      return duties.filter((duty) => duty.status === "In Progress");
+      return siteDuties.filter((duty) => duty.status === "In Progress");
     }
     if (activeFilter === "completed") {
-      return duties.filter((duty) => duty.status === "Completed");
+      return siteDuties.filter((duty) => duty.status === "Completed");
     }
     return [];
-  }, [activeFilter, duties]);
+  }, [activeFilter, activeSite, duties]);
+
+  const siteDuties = useMemo(
+    () => (activeSite ? duties.filter((duty) => duty.siteId === activeSite.id) : duties),
+    [activeSite, duties],
+  );
+  const siteIncidents = useMemo(
+    () => (activeSite ? incidents.filter((incident) => incident.siteId === activeSite.id) : incidents),
+    [activeSite, incidents],
+  );
 
   return (
     <div className="space-y-8 fade-in">
       <PageHeader
         eyebrow="Cleaner dashboard"
         title={companyName ? `${companyName} duties` : "My duties"}
-        description="Review assigned work, report incidents, and complete duties with optional evidence photos."
+        description={activeSite ? `Review assigned work for ${activeSite.name}, report incidents, and complete duties with optional evidence photos.` : "Review assigned work, report incidents, and complete duties with optional evidence photos."}
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiButton active={activeFilter === "pending"} label="Pending Duties" value={String(duties.filter(isPendingDuty).length)} detail="Ready to start" icon={<ListTodo className="h-5 w-5" />} onClick={() => setActiveFilter("pending")} />
-        <KpiButton active={activeFilter === "in-progress"} label="In Progress" value={String(duties.filter((duty) => duty.status === "In Progress").length)} detail="Currently open" icon={<Loader2 className="h-5 w-5" />} onClick={() => setActiveFilter("in-progress")} />
-        <KpiButton active={activeFilter === "completed"} label="Completed" value={String(duties.filter((duty) => duty.status === "Completed").length)} detail="Finished duties" icon={<CheckCircle2 className="h-5 w-5" />} onClick={() => setActiveFilter("completed")} />
-        <KpiButton active={activeFilter === "incidents"} label="Incidents" value={String(incidents.length)} detail="Reported by you" icon={<CircleAlert className="h-5 w-5" />} onClick={() => setActiveFilter("incidents")} />
+        <KpiButton active={activeFilter === "pending"} label="Pending Duties" value={String(siteDuties.filter(isPendingDuty).length)} detail="Ready to start" icon={<ListTodo className="h-5 w-5" />} onClick={() => setActiveFilter("pending")} />
+        <KpiButton active={activeFilter === "in-progress"} label="In Progress" value={String(siteDuties.filter((duty) => duty.status === "In Progress").length)} detail="Currently open" icon={<Loader2 className="h-5 w-5" />} onClick={() => setActiveFilter("in-progress")} />
+        <KpiButton active={activeFilter === "completed"} label="Completed" value={String(siteDuties.filter((duty) => duty.status === "Completed").length)} detail="Finished duties" icon={<CheckCircle2 className="h-5 w-5" />} onClick={() => setActiveFilter("completed")} />
+        <KpiButton active={activeFilter === "incidents"} label="Incidents" value={String(siteIncidents.length)} detail="Reported by you" icon={<CircleAlert className="h-5 w-5" />} onClick={() => setActiveFilter("incidents")} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
         <Card className="space-y-6 p-5">
           <SectionTitle title={filterTitles[activeFilter]} description={activeFilter === "incidents" ? "Incident reports submitted from your cleaner profile." : "Open a duty to start work, upload evidence, or complete it."} />
           {activeFilter === "incidents" ? (
-            <IncidentList incidents={incidents} sites={siteById} />
+            <IncidentList incidents={siteIncidents} sites={siteById} />
           ) : (
             <DutyList duties={displayedDuties} sites={siteById} isLoading={isLoadingDuties} onOpen={(duty) => openDutyMutation.mutate(duty)} isOpening={openDutyMutation.isPending} />
           )}
@@ -238,7 +249,7 @@ function CleanerDashboard() {
       </div>
 
       {selectedDuty ? (
-        <DutyDetailModal
+        <CleanerDutyDetailModal
           duty={selectedDuty}
           site={siteById.get(selectedDuty.siteId) ?? null}
           userId={userId}
@@ -248,9 +259,10 @@ function CleanerDashboard() {
 
       {isIncidentOpen ? (
         <IncidentReportModal
-          sites={sites}
+          sites={activeSite ? [activeSite] : sites}
           userId={userId}
-          duties={duties}
+          duties={siteDuties}
+          activeSiteId={activeSite?.id ?? ""}
           onClose={() => setIsIncidentOpen(false)}
         />
       ) : null}
@@ -346,118 +358,15 @@ function IncidentList(props: { incidents: Awaited<ReturnType<typeof listIncident
   );
 }
 
-function DutyDetailModal(props: {
-  duty: DutyItem;
-  site: SiteItem | null;
-  userId: string | null;
-  onClose: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
-  const [afterFiles, setAfterFiles] = useState<File[]>([]);
-
-  const completeMutation = useMutation({
-    mutationFn: async () => {
-      if (!props.userId) {
-        throw new Error("Missing cleaner profile");
-      }
-      if (!props.site) {
-        throw new Error("Missing site context");
-      }
-      const beforeUrls = beforeFiles.length
-        ? await uploadDutyEvidencePhotos({ bucketName: props.site.storageBucket, siteId: props.site.id, dutyTitle: props.duty.title, files: beforeFiles, type: "before" })
-        : [];
-      const afterUrls = afterFiles.length
-        ? await uploadDutyEvidencePhotos({ bucketName: props.site.storageBucket, siteId: props.site.id, dutyTitle: props.duty.title, files: afterFiles, type: "after" })
-        : [];
-      if (beforeUrls.length > 0 || afterUrls.length > 0) {
-        await appendDutyEvidencePhotos({ dutyId: props.duty.id, beforePhotos: beforeUrls, afterPhotos: afterUrls });
-      }
-      return updateDutyStatus(props.duty.id, "Completed");
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["cleaner-assigned-duties", props.userId] });
-      notify({ tone: "success", title: "Duty completed", message: "The duty was marked as completed." });
-      props.onClose();
-    },
-    onError: (error) => notify({ tone: "error", title: "Could not complete duty", message: error instanceof Error ? error.message : "Unknown error" }),
-  });
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-      <Card className="max-h-[90vh] w-full max-w-3xl overflow-y-auto p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xl font-semibold text-slate-950">{props.duty.title}</p>
-            <p className="mt-1 text-sm text-slate-500">{props.site?.name ?? "Assigned site"} · {props.duty.status}</p>
-          </div>
-          <button type="button" onClick={props.onClose} className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Close duty detail">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <InfoBlock label="Priority" value={props.duty.priority} />
-          <InfoBlock label="Due date" value={props.duty.dueDate ? new Date(props.duty.dueDate).toLocaleString() : "No due date"} />
-          <InfoBlock label="Equipment" value={props.duty.equipment.length ? props.duty.equipment.join(", ") : "None listed"} />
-        </div>
-
-        <div className="mt-5 rounded-2xl bg-slate-50 p-4">
-          <p className="text-sm font-semibold text-slate-950">Description</p>
-          <p className="mt-2 text-sm text-slate-600">{props.duty.description || "No description provided."}</p>
-        </div>
-
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <PhotoPicker label="Before photos" files={beforeFiles} onChange={setBeforeFiles} />
-          <PhotoPicker label="After photos" files={afterFiles} onChange={setAfterFiles} />
-        </div>
-
-        <div className="mt-6 flex flex-wrap justify-end gap-3">
-          <Button type="button" variant="secondary" onClick={props.onClose} disabled={completeMutation.isPending}>Cancel</Button>
-          <Button type="button" onClick={() => completeMutation.mutate()} disabled={completeMutation.isPending || props.duty.status === "Completed"}>
-            {completeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            Completed
-          </Button>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-function InfoBlock(props: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl bg-slate-50 p-4">
-      <p className="text-xs font-semibold uppercase text-slate-500">{props.label}</p>
-      <p className="mt-2 text-sm font-medium text-slate-950">{props.value}</p>
-    </div>
-  );
-}
-
-function PhotoPicker(props: { label: string; files: File[]; onChange: (files: File[]) => void }) {
-  function handleChange(event: ChangeEvent<HTMLInputElement>) {
-    props.onChange(Array.from(event.target.files ?? []));
-  }
-
-  return (
-    <label className="block cursor-pointer rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 transition hover:bg-slate-100">
-      <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
-        <Camera className="h-4 w-4" />
-        {props.label}
-      </div>
-      <p className="mt-2 text-sm text-slate-500">{props.files.length ? `${props.files.length} file${props.files.length === 1 ? "" : "s"} selected` : "Optional evidence upload"}</p>
-      <input type="file" accept="image/*" multiple className="hidden" onChange={handleChange} />
-    </label>
-  );
-}
-
 function IncidentReportModal(props: {
   sites: SiteItem[];
   duties: DutyItem[];
   userId: string | null;
+  activeSiteId: string;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const defaultSiteId = props.sites[0]?.id ?? "";
+  const defaultSiteId = props.activeSiteId || props.sites[0]?.id || "";
   const [siteId, setSiteId] = useState(defaultSiteId);
   const [dutyId, setDutyId] = useState("");
   const [incidentType, setIncidentType] = useState<IncidentType>("Other");

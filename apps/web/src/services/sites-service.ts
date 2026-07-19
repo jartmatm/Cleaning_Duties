@@ -51,6 +51,28 @@ export async function listSites(companyId: string, search = "") {
   return (data ?? []).map((row) => mapSite(row as SiteRow));
 }
 
+export async function listMySites(profileId: string, search = "") {
+  let query = supabase
+    .from("site_members")
+    .select("sites(id, company_id, name, address, notes, created_at, updated_at)")
+    .eq("profile_id", profileId);
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const normalizedSearch = search.trim().toLowerCase();
+
+  return (data ?? [])
+    .map((row) => (row as unknown as { sites: SiteRow | null }).sites)
+    .filter((site): site is SiteRow => site !== null)
+    .filter((site) => !normalizedSearch || site.name.toLowerCase().includes(normalizedSearch))
+    .map(mapSite)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
 export async function createSite(companyId: string, input: SiteFormInput) {
   const parsed = siteFormSchema.parse(input);
 

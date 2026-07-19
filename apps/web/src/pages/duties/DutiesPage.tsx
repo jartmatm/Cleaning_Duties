@@ -5,12 +5,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
+import { CleanerDutyDetailModal } from "../../components/common/cleaner-duty-detail-modal";
 import { Input } from "../../components/ui/input";
 import { PageHeader } from "../../components/common/page-header";
 import { SectionTitle } from "../../components/common/section-title";
 import { ConfirmationDialog } from "../../components/common/confirmation-dialog";
-import { listSites, type SiteItem } from "../../services/sites-service";
-import { createDuty, deleteDuty, listDuties, type DutyItem, updateDuty } from "../../services/duties-service";
+import { listMySites, listSites, type SiteItem } from "../../services/sites-service";
+import { createDuty, deleteDuty, listAssignedDuties, listDuties, type DutyItem, updateDuty, updateDutyStatus } from "../../services/duties-service";
 import { listAssignableMembers, type AssigneeOption } from "../../services/assignments-service";
 import { useSession } from "../../hooks/use-session";
 import { dutyFormSchema, type DutyFormInput, DUTY_PRIORITIES, DUTY_STATUSES } from "@cleaning-duties/shared";
@@ -37,20 +38,21 @@ function getInitials(name: string) {
 
 export function DutiesPage() {
   const queryClient = useQueryClient();
-  const { companyId, userId, activeSiteId: sessionActiveSiteId, setActiveSiteId: setSessionActiveSiteId } = useSession();
+  const { companyId, userId, role, activeSiteId: sessionActiveSiteId, setActiveSiteId: setSessionActiveSiteId } = useSession();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [search, setSearch] = useState("");
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [editingDuty, setEditingDuty] = useState<DutyItem | null>(null);
+  const [selectedCleanerDuty, setSelectedCleanerDuty] = useState<DutyItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DutyItem | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [referencePhotoItems, setReferencePhotoItems] = useState<ReferencePhotoItem[]>([]);
 
   const { data: sites = [] } = useQuery({
-    queryKey: ["sites", companyId],
-    queryFn: () => listSites(companyId ?? ""),
-    enabled: Boolean(companyId),
+    queryKey: role === "Cleaner" ? ["sites", "cleaner", userId] : ["sites", companyId],
+    queryFn: () => role === "Cleaner" ? listMySites(userId ?? "") : listSites(companyId ?? ""),
+    enabled: role === "Cleaner" ? Boolean(userId) : Boolean(companyId),
   });
 
   const activeSiteId = selectedSiteId ?? sessionActiveSiteId ?? sites[0]?.id ?? null;
@@ -64,9 +66,15 @@ export function DutiesPage() {
   });
 
   const { data: duties = [], isLoading } = useQuery({
-    queryKey: ["duties", activeSiteId, search],
-    queryFn: () => listDuties(activeSiteId ?? "", search),
-    enabled: Boolean(activeSiteId),
+    queryKey: role === "Cleaner" ? ["cleaner-assigned-duties", userId] : ["duties", activeSiteId, search],
+    queryFn: () => {
+      if (role === "Cleaner") {
+        return listAssignedDuties(userId ?? "");
+      }
+
+      return listDuties(activeSiteId ?? "", search);
+    },
+    enabled: role === "Cleaner" ? Boolean(userId) : Boolean(activeSiteId),
   });
 
   const form = useForm<DutyFormInput>({
@@ -143,7 +151,28 @@ export function DutiesPage() {
     },
   });
 
+  const openCleanerDutyMutation = useMutation({
+    mutationFn: async (duty: DutyItem) => {
+      if (duty.status === "Completed" || duty.status === "In Progress") {
+        return duty;
+      }
+
+      return updateDutyStatus(duty.id, "In Progress");
+    },
+    onSuccess: async (duty) => {
+      await queryClient.invalidateQueries({ queryKey: ["cleaner-assigned-duties", userId] });
+      setSelectedCleanerDuty(duty);
+    },
+    onError: (error) => {
+      notify({ tone: "error", title: "Could not open duty", message: error instanceof Error ? error.message : "Unknown error" });
+    },
+  });
+
   const dutyCount = useMemo(() => duties.length, [duties]);
+  const visibleDuties = useMemo(
+    () => role === "Cleaner" ? duties.filter((duty) => duty.siteId === activeSiteId) : duties,
+    [activeSiteId, duties, role],
+  );
   const assigneesById = useMemo(
     () => new Map(assignees.map((assignee) => [assignee.id, assignee])),
     [assignees],
@@ -291,8 +320,8 @@ export function DutiesPage() {
       <PageHeader
         eyebrow="Cleaning Duties"
         title="Duty board"
-        description="Review the current duty load, filter by priority or status, and open any duty to manage assignments and evidence."
-        actions={
+        description={role === "Cleaner" ? "Review and complete your assigned duties for the selected site." : "Review the current duty load, filter by priority or status, and open any duty to manage assignments and evidence."}
+        actions={role === "Cleaner" ? null : (
           <>
             <Button variant="secondary">
               <Filter className="h-4 w-4" />
@@ -312,7 +341,7 @@ export function DutiesPage() {
               )}
             </Button>
           </>
-        }
+        )}
       />
 
       <Card className="space-y-4 p-5">
@@ -349,6 +378,7 @@ export function DutiesPage() {
             </div>
           </div>
         </div>
+        {role !== "Cleaner" ? (
         <div className="flex flex-wrap gap-2">
           {DUTY_PRIORITIES.map((priority) => (
             <Button key={priority} variant="secondary">
@@ -361,9 +391,10 @@ export function DutiesPage() {
             </Button>
           ))}
         </div>
+        ) : null}
       </Card>
 
-      {showCreate || editingDuty ? (
+      {role !== "Cleaner" && (showCreate || editingDuty) ? (
         <Card className="space-y-4 p-5">
           <div className="flex items-center justify-between gap-4">
             <SectionTitle
@@ -587,11 +618,12 @@ export function DutiesPage() {
       <div className="grid gap-4 xl:grid-cols-2">
         {isLoading ? (
           <Card className="p-5">Loading duties...</Card>
-        ) : duties.length === 0 ? (
+        ) : visibleDuties.length === 0 ? (
           <Card className="p-8 text-center">
             <p className="text-lg font-semibold text-slate-950">No duties for this site</p>
-            <p className="mt-2 text-sm text-slate-500">Create the first duty to start assigning cleaners and due dates.</p>
-            <div className="mt-4">
+            <p className="mt-2 text-sm text-slate-500">{role === "Cleaner" ? "No assigned duties for the selected site." : "Create the first duty to start assigning cleaners and due dates."}</p>
+            {role !== "Cleaner" ? (
+              <div className="mt-4">
               <Button onClick={startCreate} disabled={createMutation.isPending || updateMutation.isPending || deleteMutation.isPending}>
                 {createMutation.isPending ? (
                   <>
@@ -603,9 +635,10 @@ export function DutiesPage() {
                 )}
               </Button>
             </div>
+            ) : null}
           </Card>
         ) : (
-          duties.map((duty) => {
+          visibleDuties.map((duty) => {
             const assignedCleaners = duty.assignedUserIds
               .map((assigneeId) => assigneesById.get(assigneeId))
               .filter((assignee): assignee is AssigneeOption => Boolean(assignee));
@@ -613,7 +646,19 @@ export function DutiesPage() {
             const extraAssignedCleanersCount = Math.max(assignedCleaners.length - visibleAssignedCleaners.length, 0);
 
             return (
-              <Card key={duty.id} className="space-y-4 p-5">
+              <Card
+                key={duty.id}
+                role={role === "Cleaner" ? "button" : undefined}
+                tabIndex={role === "Cleaner" ? 0 : undefined}
+                className={`space-y-4 p-5 ${role === "Cleaner" ? "cursor-pointer transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300" : ""}`}
+                onClick={role === "Cleaner" ? () => openCleanerDutyMutation.mutate(duty) : undefined}
+                onKeyDown={role === "Cleaner" ? (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openCleanerDutyMutation.mutate(duty);
+                  }
+                } : undefined}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-lg font-semibold text-slate-950">{duty.title}</p>
@@ -627,16 +672,32 @@ export function DutiesPage() {
                 </div>
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div className="flex flex-wrap gap-2">
-                    <Button variant="secondary" onClick={() => startEdit(duty)}>
-                      <Pencil className="h-4 w-4" />
-                      Edit
-                    </Button>
-                    <Button variant="ghost" onClick={() => setDeleteTarget(duty)}>
-                      <Trash2 className="h-4 w-4" />
-                      Delete
-                    </Button>
+                    {role === "Cleaner" ? (
+                      <Button
+                        variant="secondary"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openCleanerDutyMutation.mutate(duty);
+                        }}
+                        disabled={openCleanerDutyMutation.isPending}
+                      >
+                        {openCleanerDutyMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                        Open
+                      </Button>
+                    ) : (
+                      <>
+                        <Button variant="secondary" onClick={() => startEdit(duty)}>
+                          <Pencil className="h-4 w-4" />
+                          Edit
+                        </Button>
+                        <Button variant="ghost" onClick={() => setDeleteTarget(duty)}>
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </Button>
+                      </>
+                    )}
                   </div>
-                  {assignedCleaners.length > 0 ? (
+                  {role !== "Cleaner" && assignedCleaners.length > 0 ? (
                     <div
                       className="ml-auto flex items-center justify-end -space-x-2"
                       aria-label={`${assignedCleaners.length} assigned cleaner${assignedCleaners.length === 1 ? "" : "s"}`}
@@ -659,8 +720,10 @@ export function DutiesPage() {
                         </div>
                       ) : null}
                     </div>
-                  ) : (
+                  ) : role !== "Cleaner" ? (
                     <p className="ml-auto text-right text-xs font-medium text-amber-600">No cleaner assigned</p>
+                  ) : (
+                    <p className="ml-auto text-right text-xs font-medium text-slate-500">{activeSite?.name ?? "Selected site"}</p>
                   )}
                 </div>
               </Card>
@@ -669,6 +732,7 @@ export function DutiesPage() {
         )}
       </div>
 
+      {role !== "Cleaner" ? (
       <Card className="space-y-4 p-5">
         <SectionTitle title="Status distribution" description={`The current mix of work across the active site. ${dutyCount} duties loaded.`} />
         <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
@@ -680,6 +744,7 @@ export function DutiesPage() {
           ))}
         </div>
       </Card>
+      ) : null}
 
       {deleteTarget ? (
         <ConfirmationDialog
@@ -691,6 +756,15 @@ export function DutiesPage() {
           onConfirm={async () => {
             await deleteMutation.mutateAsync(deleteTarget.id);
           }}
+        />
+      ) : null}
+
+      {selectedCleanerDuty ? (
+        <CleanerDutyDetailModal
+          duty={selectedCleanerDuty}
+          site={activeSite}
+          userId={userId}
+          onClose={() => setSelectedCleanerDuty(null)}
         />
       ) : null}
     </div>

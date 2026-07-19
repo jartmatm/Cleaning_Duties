@@ -8,17 +8,17 @@ import { signOut } from "../services/auth-service";
 import { useSession } from "../hooks/use-session";
 import { navigationItems } from "../constants/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { listSites } from "../services/sites-service";
+import { listMySites, listSites } from "../services/sites-service";
 import { getCompanyPalette } from "../constants/company-palettes";
 import { getCompanySettings } from "../services/company-service";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
-  const { email, role, companyId, companyName, companyLogoUrl, companyPalette, activeSiteId, setActiveSiteId, setCompanyBranding } = useSession();
+  const { userId, email, role, companyId, companyName, companyLogoUrl, companyPalette, activeSiteId, setActiveSiteId, setCompanyBranding } = useSession();
   const { data: sites = [] } = useQuery({
-    queryKey: ["layout-sites", companyId],
-    queryFn: () => listSites(companyId ?? ""),
-    enabled: Boolean(companyId),
+    queryKey: role === "Cleaner" ? ["layout-sites", companyId, "cleaner", userId] : ["layout-sites", companyId],
+    queryFn: () => role === "Cleaner" ? listMySites(userId ?? "") : listSites(companyId ?? ""),
+    enabled: role === "Cleaner" ? Boolean(userId) : Boolean(companyId),
   });
   const { data: companySettings } = useQuery({
     queryKey: ["company-settings", companyId],
@@ -37,7 +37,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const firstSite = sites[0];
-    if (!activeSiteId && firstSite) {
+    const activeSiteIsAvailable = sites.some((site) => site.id === activeSiteId);
+    if ((!activeSiteId || !activeSiteIsAvailable) && firstSite) {
       setActiveSiteId(firstSite.id);
     }
   }, [activeSiteId, setActiveSiteId, sites]);

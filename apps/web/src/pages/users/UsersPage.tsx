@@ -61,7 +61,8 @@ function getInviteErrorMessage(body: unknown, response: Response) {
 
 export function UsersPage() {
   const queryClient = useQueryClient();
-  const { companyId } = useSession();
+  const { companyId, role } = useSession();
+  const isCleaner = role === "Cleaner";
   const [isInviteOpen, setIsInviteOpen] = useState(false);
 
   const { data: sites = [] } = useQuery({
@@ -152,8 +153,8 @@ export function UsersPage() {
       <PageHeader
         eyebrow="Users"
         title="People and access"
-        description="Invite managers and cleaners, review invitation status, and keep every person scoped to the sites they belong to."
-        actions={
+        description={isCleaner ? "Review active cleaners and site access for your company." : "Invite managers and cleaners, review invitation status, and keep every person scoped to the sites they belong to."}
+        actions={isCleaner ? null : (
           <>
             <Button
               variant="secondary"
@@ -170,10 +171,10 @@ export function UsersPage() {
               Invite Manager
             </Button>
           </>
-        }
+        )}
       />
 
-      {isInviteOpen ? (
+      {!isCleaner && isInviteOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
           <Card className="w-full max-w-2xl space-y-6 p-6">
             <div className="flex items-start justify-between gap-4">
