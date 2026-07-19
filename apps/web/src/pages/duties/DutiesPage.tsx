@@ -25,6 +25,16 @@ type ReferencePhotoItem = {
   fileName: string;
 };
 
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((part) => part.trim()[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
 export function DutiesPage() {
   const queryClient = useQueryClient();
   const { companyId, userId, activeSiteId: sessionActiveSiteId, setActiveSiteId: setSessionActiveSiteId } = useSession();
@@ -134,6 +144,10 @@ export function DutiesPage() {
   });
 
   const dutyCount = useMemo(() => duties.length, [duties]);
+  const assigneesById = useMemo(
+    () => new Map(assignees.map((assignee) => [assignee.id, assignee])),
+    [assignees],
+  );
 
   useEffect(() => {
     if (sessionActiveSiteId) {
@@ -591,31 +605,67 @@ export function DutiesPage() {
             </div>
           </Card>
         ) : (
-          duties.map((duty) => (
-            <Card key={duty.id} className="space-y-4 p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-lg font-semibold text-slate-950">{duty.title}</p>
-                  <p className="mt-1 text-sm text-slate-500">{duty.description || "No description"}</p>
+          duties.map((duty) => {
+            const assignedCleaners = duty.assignedUserIds
+              .map((assigneeId) => assigneesById.get(assigneeId))
+              .filter((assignee): assignee is AssigneeOption => Boolean(assignee));
+            const visibleAssignedCleaners = assignedCleaners.slice(0, 3);
+            const extraAssignedCleanersCount = Math.max(assignedCleaners.length - visibleAssignedCleaners.length, 0);
+
+            return (
+              <Card key={duty.id} className="space-y-4 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-lg font-semibold text-slate-950">{duty.title}</p>
+                    <p className="mt-1 text-sm text-slate-500">{duty.description || "No description"}</p>
+                  </div>
+                  <div className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{duty.status}</div>
                 </div>
-                <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{duty.status}</div>
-              </div>
-              <div className="flex flex-wrap gap-2 text-xs font-medium text-slate-600">
-                <span className="rounded-full bg-slate-50 px-3 py-1 ring-1 ring-slate-200">{duty.priority}</span>
-                <span className="rounded-full bg-slate-50 px-3 py-1 ring-1 ring-slate-200">{duty.dueDate ? new Date(duty.dueDate).toLocaleString() : "No due date"}</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" onClick={() => startEdit(duty)}>
-                  <Pencil className="h-4 w-4" />
-                  Edit
-                </Button>
-                <Button variant="ghost" onClick={() => setDeleteTarget(duty)}>
-                  <Trash2 className="h-4 w-4" />
-                  Delete
-                </Button>
-              </div>
-            </Card>
-          ))
+                <div className="flex flex-wrap gap-2 text-xs font-medium text-slate-600">
+                  <span className="rounded-full bg-slate-50 px-3 py-1 ring-1 ring-slate-200">{duty.priority}</span>
+                  <span className="rounded-full bg-slate-50 px-3 py-1 ring-1 ring-slate-200">{duty.dueDate ? new Date(duty.dueDate).toLocaleString() : "No due date"}</span>
+                </div>
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="secondary" onClick={() => startEdit(duty)}>
+                      <Pencil className="h-4 w-4" />
+                      Edit
+                    </Button>
+                    <Button variant="ghost" onClick={() => setDeleteTarget(duty)}>
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </Button>
+                  </div>
+                  {assignedCleaners.length > 0 ? (
+                    <div
+                      className="ml-auto flex items-center justify-end -space-x-2"
+                      aria-label={`${assignedCleaners.length} assigned cleaner${assignedCleaners.length === 1 ? "" : "s"}`}
+                    >
+                      {visibleAssignedCleaners.map((cleaner) => (
+                        <div
+                          key={cleaner.id}
+                          title={cleaner.name}
+                          className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-emerald-100 text-xs font-bold text-emerald-800 shadow-sm"
+                        >
+                          {getInitials(cleaner.name) || "?"}
+                        </div>
+                      ))}
+                      {extraAssignedCleanersCount > 0 ? (
+                        <div
+                          title={`${extraAssignedCleanersCount} more assigned`}
+                          className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-900 text-xs font-bold text-white shadow-sm"
+                        >
+                          +{extraAssignedCleanersCount}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="ml-auto text-right text-xs font-medium text-amber-600">No cleaner assigned</p>
+                  )}
+                </div>
+              </Card>
+            );
+          })
         )}
       </div>
 

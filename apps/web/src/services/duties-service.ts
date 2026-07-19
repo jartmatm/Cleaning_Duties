@@ -66,6 +66,36 @@ function mapDuty(row: DutyRow): DutyItem {
   };
 }
 
+async function attachDutyAssignments(duties: DutyItem[]) {
+  const dutyIds = duties.map((duty) => duty.id);
+
+  if (dutyIds.length === 0) {
+    return duties;
+  }
+
+  const { data, error } = await supabase
+    .from("duty_assignments")
+    .select("duty_id, profile_id")
+    .in("duty_id", dutyIds);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const assignmentsByDutyId = new Map<string, string[]>();
+
+  for (const row of data ?? []) {
+    const assignment = row as { duty_id: string; profile_id: string };
+    const currentAssignments = assignmentsByDutyId.get(assignment.duty_id) ?? [];
+    assignmentsByDutyId.set(assignment.duty_id, [...currentAssignments, assignment.profile_id]);
+  }
+
+  return duties.map((duty) => ({
+    ...duty,
+    assignedUserIds: assignmentsByDutyId.get(duty.id) ?? [],
+  }));
+}
+
 function parseCsvList(value: string | undefined) {
   return (value ?? "")
     .split(",")
@@ -104,7 +134,7 @@ export async function listDuties(siteId: string, search = "") {
     throw new Error(error.message);
   }
 
-  return (data ?? []).map((row) => mapDuty(row as DutyRow));
+  return attachDutyAssignments((data ?? []).map((row) => mapDuty(row as DutyRow)));
 }
 
 export async function listAssignedDuties(profileId: string) {
@@ -150,7 +180,7 @@ export async function createDuty(siteId: string, createdBy: string, values: Duty
 
   const duty = mapDuty(data as DutyRow);
   await replaceDutyAssignments(duty.id, siteId, payload.assignedUserIds, createdBy);
-  return duty;
+  return { ...duty, assignedUserIds: payload.assignedUserIds };
 }
 
 export async function updateDuty(dutyId: string, values: DutyFormInput) {
@@ -176,7 +206,7 @@ export async function updateDuty(dutyId: string, values: DutyFormInput) {
 
   const duty = mapDuty(data as DutyRow);
   await replaceDutyAssignments(duty.id, duty.siteId, payload.assignedUserIds, duty.createdBy);
-  return duty;
+  return { ...duty, assignedUserIds: payload.assignedUserIds };
 }
 
 export async function updateDutyStatus(dutyId: string, status: DutyRow["status"]) {

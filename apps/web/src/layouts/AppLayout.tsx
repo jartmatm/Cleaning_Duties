@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { AppLogo } from "../components/common/app-logo";
 import { MobileNav } from "../components/common/mobile-nav";
@@ -10,17 +10,30 @@ import { navigationItems } from "../constants/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { listSites } from "../services/sites-service";
 import { getCompanyPalette } from "../constants/company-palettes";
+import { getCompanySettings } from "../services/company-service";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
-  const { email, role, companyId, companyName, companyLogoUrl, companyPalette, activeSiteId, setActiveSiteId } = useSession();
+  const { email, role, companyId, companyName, companyLogoUrl, companyPalette, activeSiteId, setActiveSiteId, setCompanyBranding } = useSession();
   const { data: sites = [] } = useQuery({
     queryKey: ["layout-sites", companyId],
     queryFn: () => listSites(companyId ?? ""),
     enabled: Boolean(companyId),
   });
+  const { data: companySettings } = useQuery({
+    queryKey: ["company-settings", companyId],
+    queryFn: () => getCompanySettings(companyId ?? ""),
+    enabled: Boolean(companyId),
+  });
   const activeSite = sites.find((site) => site.id === activeSiteId) ?? sites[0] ?? null;
   const palette = getCompanyPalette(companyPalette);
+  const themeStyle = {
+    "--company-primary": palette.primary,
+    "--company-accent": palette.accent,
+    "--company-surface": palette.surface,
+    "--company-text": palette.text,
+    "--company-border": `color-mix(in srgb, ${palette.accent} 28%, white)`,
+  } as CSSProperties;
 
   useEffect(() => {
     const firstSite = sites[0];
@@ -29,10 +42,22 @@ export function AppLayout({ children }: { children: ReactNode }) {
     }
   }, [activeSiteId, setActiveSiteId, sites]);
 
+  useEffect(() => {
+    if (!companySettings) {
+      return;
+    }
+
+    setCompanyBranding({
+      companyName: companySettings.name,
+      companyLogoUrl: companySettings.logoUrl,
+      companyPalette: companySettings.colorPalette,
+    });
+  }, [companySettings, setCompanyBranding]);
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen bg-[var(--company-surface)] text-[var(--company-text)]" style={themeStyle}>
       <div className="mx-auto flex min-h-screen max-w-7xl gap-6 px-4 py-4 pb-24 lg:px-6 lg:py-6 lg:pb-6">
-        <aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-72 flex-col justify-between rounded-[2rem] bg-white p-6 shadow-sm ring-1 ring-slate-200 lg:flex">
+        <aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-72 flex-col justify-between rounded-[2rem] bg-white p-6 shadow-sm ring-1 ring-[var(--company-border)] lg:flex">
           <div className="space-y-8">
             <AppLogo title={companyName ?? "Cleaning Duties"} subtitle={activeSite?.name ?? "No site selected"} logoUrl={companyLogoUrl} />
             <nav className="space-y-2 text-sm">
@@ -45,7 +70,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                     end={item.to === "/"}
                     className={({ isActive }) =>
                       `flex items-center gap-3 rounded-2xl px-4 py-3 transition ${
-                        isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
+                        isActive ? "bg-[var(--company-primary)] text-white" : "text-slate-600 hover:bg-[var(--company-surface)]"
                       }`
                     }
                   >
@@ -57,8 +82,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </nav>
           </div>
           <div className="space-y-3">
-            <div className="rounded-2xl bg-slate-50 p-4 text-xs text-slate-500">
-              <p className="font-medium text-slate-900">{email ?? "Not signed in"}</p>
+            <div className="rounded-2xl bg-[var(--company-surface)] p-4 text-xs text-slate-500">
+              <p className="font-medium text-[var(--company-text)]">{email ?? "Not signed in"}</p>
               <p className="mt-1">{role ?? "Cleaner"}</p>
             </div>
             <Button
@@ -73,7 +98,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </aside>
 
-        <main className="flex-1 space-y-6 rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-slate-200 lg:p-8">
+        <main className="flex-1 space-y-6 rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-[var(--company-border)] lg:p-8">
           <div className="flex items-center justify-between gap-4 lg:hidden">
             <AppLogo title={companyName ?? "Cleaning Duties"} subtitle={activeSite?.name ?? "No site selected"} logoUrl={companyLogoUrl} />
             <Button

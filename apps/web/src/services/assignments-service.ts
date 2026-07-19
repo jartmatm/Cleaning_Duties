@@ -67,16 +67,23 @@ export async function replaceDutyAssignments(dutyId: string, siteId: string, ass
     return;
   }
 
-  const { error: insertError } = await supabase.from("duty_assignments").insert(
-    uniqueAssignedUserIds.map((profileId) => ({
-      duty_id: dutyId,
-      profile_id: profileId,
-      assigned_by: assignedBy,
-    })),
-  );
+  const { data: insertedAssignments, error: insertError } = await supabase
+    .from("duty_assignments")
+    .insert(
+      uniqueAssignedUserIds.map((profileId) => ({
+        duty_id: dutyId,
+        profile_id: profileId,
+        assigned_by: assignedBy,
+      })),
+    )
+    .select("profile_id");
 
   if (insertError) {
     throw new Error(insertError.message);
+  }
+
+  if ((insertedAssignments ?? []).length !== uniqueAssignedUserIds.length) {
+    throw new Error("Duty assignments were not saved. Check manager permissions for this site.");
   }
 
   const response = await fetch(apiUrl("/duty-notifications/assignments"), {

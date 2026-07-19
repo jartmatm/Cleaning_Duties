@@ -8,9 +8,9 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: "bg-slate-900 text-white hover:bg-slate-800",
-  secondary: "bg-white text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50",
-  ghost: "bg-transparent text-slate-900 hover:bg-slate-100",
+  primary: "bg-[var(--company-primary)] text-white hover:brightness-95",
+  secondary: "bg-white text-[var(--company-text)] ring-1 ring-[var(--company-border)] hover:bg-[var(--company-surface)]",
+  ghost: "bg-transparent text-[var(--company-text)] hover:bg-[var(--company-surface)]",
 };
 
 export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
