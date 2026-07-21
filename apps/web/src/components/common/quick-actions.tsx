@@ -1,7 +1,10 @@
+import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 
 export function QuickActions() {
+  const navigate = useNavigate();
+
   return (
     <Card className="space-y-4 p-5">
       <div>
@@ -10,7 +13,7 @@ export function QuickActions() {
       </div>
       <div className="flex flex-wrap gap-2">
         <Button>Create Site</Button>
-        <Button variant="secondary">Create Duty</Button>
+        <Button variant="secondary" onClick={() => navigate("/duties?create=1")}>Create Duty</Button>
         <Button variant="ghost">Invite User</Button>
       </div>
     </Card>

@@ -1,6 +1,7 @@
 import { Check, Filter, Loader2, Plus, Search, Pencil, Upload, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "../../components/ui/button";
@@ -38,6 +39,7 @@ function getInitials(name: string) {
 
 export function DutiesPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { companyId, userId, role, activeSiteId: sessionActiveSiteId, setActiveSiteId: setSessionActiveSiteId } = useSession();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [search, setSearch] = useState("");
@@ -200,6 +202,18 @@ export function DutiesPage() {
       assignedUserIds: [],
     });
   }
+
+  useEffect(() => {
+    if (role === "Cleaner" || searchParams.get("create") !== "1") {
+      return;
+    }
+
+    startCreate();
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("create");
+    setSearchParams(nextParams, { replace: true });
+  }, [role, searchParams, setSearchParams]);
 
   function startEdit(duty: DutyItem) {
     setShowCreate(false);

@@ -2,6 +2,7 @@ import { INCIDENT_TYPES, type IncidentType } from "@cleaning-duties/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, CheckCircle2, CircleAlert, ClipboardList, ListTodo, Loader2, Send, Sparkles, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { CleanerDutyDetailModal } from "../../components/common/cleaner-duty-detail-modal";
@@ -30,6 +31,7 @@ function isPendingDuty(duty: DutyItem) {
 }
 
 function ManagerDashboard() {
+  const navigate = useNavigate();
   const { userId, companyId, companyName, activeSiteId } = useSession();
   const { data: sites = [] } = useQuery({
     queryKey: ["dashboard-sites", companyId],
@@ -71,7 +73,7 @@ function ManagerDashboard() {
         actions={
           <>
             <Button variant="secondary">View Reports</Button>
-            <Button>Create Duty</Button>
+            <Button onClick={() => navigate("/duties?create=1")}>Create Duty</Button>
           </>
         }
       />
