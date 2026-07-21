@@ -105,11 +105,9 @@ export function LoginPage() {
             <DataCleanLottiePreview />
           </div>
           <div className="space-y-4">
-            <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Secure access</p>
-            <h1 className="text-4xl font-semibold tracking-tight">Manage cleaning operations with clarity.</h1>
-            <p className="max-w-md text-sm text-slate-600">
-              Login with email or phone using Supabase Auth and keep every site, duty, and incident under one system.
-            </p>
+            <p className="text-xs uppercase tracking-[0.35em] text-slate-500">WELCOME</p>
+            <h1 className="text-4xl font-semibold tracking-tight">Cleaning Duties...</h1>
+            <p className="max-w-md text-sm text-slate-600">Manage cleaning operations with clarity.</p>
           </div>
         </div>
         <form className="space-y-4 p-2 lg:p-4" onSubmit={handleSubmit(onSubmit)}>

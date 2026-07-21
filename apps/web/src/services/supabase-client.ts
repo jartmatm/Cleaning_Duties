@@ -4,8 +4,9 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const supabaseKey = supabaseAnonKey ?? supabasePublishableKey;
+const hasSupabaseConfig = Boolean(supabaseUrl && supabaseKey);
 
-if (!supabaseUrl || !supabaseKey) {
+if (!hasSupabaseConfig && !import.meta.env.DEV) {
   throw new Error("Missing VITE_SUPABASE_URL and a Supabase key.");
 }
 
@@ -28,7 +29,7 @@ function createStorage() {
   };
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey, {
+export const supabase = createClient(supabaseUrl ?? "http://localhost", supabaseKey ?? "missing-supabase-key", {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
