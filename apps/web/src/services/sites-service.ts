@@ -7,6 +7,7 @@ export type SiteRow = {
   name: string;
   address: string | null;
   notes: string;
+  storage_bucket: string;
   created_at: string;
   updated_at: string;
 };
@@ -29,14 +30,14 @@ function mapSite(row: SiteRow): SiteItem {
     name: row.name,
     address: row.address,
     notes: row.notes,
-    storageBucket: `site-${row.id}`,
+    storageBucket: row.storage_bucket || `site-${row.id}`,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
 export async function listSites(companyId: string, search = "") {
-  let query = supabase.from("sites").select("id, company_id, name, address, notes, created_at, updated_at").eq("company_id", companyId);
+  let query = supabase.from("sites").select("id, company_id, name, address, notes, storage_bucket, created_at, updated_at").eq("company_id", companyId);
 
   if (search.trim()) {
     query = query.ilike("name", `%${search.trim()}%`);
@@ -54,7 +55,7 @@ export async function listSites(companyId: string, search = "") {
 export async function listMySites(profileId: string, search = "") {
   let query = supabase
     .from("site_members")
-    .select("sites(id, company_id, name, address, notes, created_at, updated_at)")
+    .select("sites(id, company_id, name, address, notes, storage_bucket, created_at, updated_at)")
     .eq("profile_id", profileId);
 
   const { data, error } = await query;
@@ -84,7 +85,7 @@ export async function createSite(companyId: string, input: SiteFormInput) {
       address: parsed.address || null,
       notes: parsed.notes,
     })
-    .select("id, company_id, name, address, notes, created_at, updated_at")
+    .select("id, company_id, name, address, notes, storage_bucket, created_at, updated_at")
     .single();
 
   if (error) {
@@ -105,7 +106,7 @@ export async function updateSite(siteId: string, input: SiteFormInput) {
       notes: parsed.notes,
     })
     .eq("id", siteId)
-    .select("id, company_id, name, address, notes, created_at, updated_at")
+    .select("id, company_id, name, address, notes, storage_bucket, created_at, updated_at")
     .single();
 
   if (error) {
