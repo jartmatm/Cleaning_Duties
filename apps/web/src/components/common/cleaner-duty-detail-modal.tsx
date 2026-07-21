@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type TouchEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type TouchEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, X } from "lucide-react";
 import { Button } from "../ui/button";
@@ -235,6 +235,7 @@ function InfoBlock(props: { label: string; value: string }) {
 }
 
 function PhotoPicker(props: { label: string; files: File[]; onChange: (files: File[]) => void }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const previews = useMemo(
     () => props.files.map((file) => ({ file, previewUrl: URL.createObjectURL(file) })),
     [props.files],
@@ -260,11 +261,15 @@ function PhotoPicker(props: { label: string; files: File[]; onChange: (files: Fi
   return (
     <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-950">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+        >
           <Camera className="h-4 w-4" />
           {props.label}
-          <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handleChange} />
-        </label>
+        </button>
+        <input ref={inputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handleChange} />
         <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
           {props.files.length} selected
         </span>
