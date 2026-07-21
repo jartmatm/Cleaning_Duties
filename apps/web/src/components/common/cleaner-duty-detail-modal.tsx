@@ -1,6 +1,6 @@
-import { useState, type ChangeEvent } from "react";
+import { useState, type ChangeEvent, type TouchEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Camera, CheckCircle2, Loader2, X } from "lucide-react";
+import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { DutyStatusBadge } from "./duty-status-badge";
@@ -21,6 +21,9 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose }: CleanerD
   const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
   const [afterFiles, setAfterFiles] = useState<File[]>([]);
   const [comment, setComment] = useState("");
+  const [selectedReferencePhotoIndex, setSelectedReferencePhotoIndex] = useState<number | null>(null);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const selectedReferencePhoto = selectedReferencePhotoIndex === null ? null : duty.referencePhotos[selectedReferencePhotoIndex] ?? null;
 
   const completeMutation = useMutation({
     mutationFn: async () => {
@@ -51,6 +54,47 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose }: CleanerD
     onError: (error) => notify({ tone: "error", title: "Could not complete duty", message: error instanceof Error ? error.message : "Unknown error" }),
   });
 
+  function showPreviousReferencePhoto() {
+    setSelectedReferencePhotoIndex((current) => {
+      if (current === null || duty.referencePhotos.length === 0) {
+        return current;
+      }
+
+      return (current - 1 + duty.referencePhotos.length) % duty.referencePhotos.length;
+    });
+  }
+
+  function showNextReferencePhoto() {
+    setSelectedReferencePhotoIndex((current) => {
+      if (current === null || duty.referencePhotos.length === 0) {
+        return current;
+      }
+
+      return (current + 1) % duty.referencePhotos.length;
+    });
+  }
+
+  function handleReferencePhotoTouchEnd(event: TouchEvent<HTMLDivElement>) {
+    if (touchStartX === null) {
+      return;
+    }
+
+    const touchEndX = event.changedTouches[0]?.clientX ?? touchStartX;
+    const distance = touchEndX - touchStartX;
+    setTouchStartX(null);
+
+    if (Math.abs(distance) < 40) {
+      return;
+    }
+
+    if (distance > 0) {
+      showPreviousReferencePhoto();
+      return;
+    }
+
+    showNextReferencePhoto();
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
       <Card className="max-h-[90vh] w-full max-w-3xl overflow-y-auto p-6">
@@ -77,6 +121,25 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose }: CleanerD
           <p className="text-sm font-semibold text-slate-950">Description</p>
           <p className="mt-2 text-sm text-slate-600">{duty.description || "No description provided."}</p>
         </div>
+
+        {duty.referencePhotos.length > 0 ? (
+          <div className="mt-5 space-y-3">
+            <p className="text-sm font-semibold text-slate-950">Reference Photos</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+              {duty.referencePhotos.map((photoUrl, index) => (
+                <button
+                  key={photoUrl}
+                  type="button"
+                  onClick={() => setSelectedReferencePhotoIndex(index)}
+                  className="group relative aspect-square overflow-hidden rounded-2xl bg-slate-100 ring-1 ring-slate-200 transition hover:ring-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  aria-label={`Open reference photo ${index + 1}`}
+                >
+                  <img src={photoUrl} alt={`Reference photo ${index + 1}`} className="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <PhotoPicker label="Before photos" files={beforeFiles} onChange={setBeforeFiles} />
@@ -105,6 +168,55 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose }: CleanerD
           </Button>
         </div>
       </Card>
+
+      {selectedReferencePhoto ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950 p-4"
+          onTouchStart={(event) => setTouchStartX(event.touches[0]?.clientX ?? null)}
+          onTouchEnd={handleReferencePhotoTouchEnd}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Reference photo viewer"
+        >
+          <button
+            type="button"
+            onClick={() => setSelectedReferencePhotoIndex(null)}
+            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20"
+            aria-label="Close reference photo viewer"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          {duty.referencePhotos.length > 1 ? (
+            <button
+              type="button"
+              onClick={showPreviousReferencePhoto}
+              className="absolute left-4 top-1/2 hidden -translate-y-1/2 rounded-full bg-white/10 p-3 text-white transition hover:bg-white/20 sm:block"
+              aria-label="Previous reference photo"
+            >
+              <ChevronLeft className="h-7 w-7" />
+            </button>
+          ) : null}
+          <img
+            src={selectedReferencePhoto}
+            alt={`Reference photo ${(selectedReferencePhotoIndex ?? 0) + 1}`}
+            className="max-h-[82vh] max-w-full select-none rounded-2xl object-contain"
+            draggable={false}
+          />
+          {duty.referencePhotos.length > 1 ? (
+            <button
+              type="button"
+              onClick={showNextReferencePhoto}
+              className="absolute right-4 top-1/2 hidden -translate-y-1/2 rounded-full bg-white/10 p-3 text-white transition hover:bg-white/20 sm:block"
+              aria-label="Next reference photo"
+            >
+              <ChevronRight className="h-7 w-7" />
+            </button>
+          ) : null}
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white">
+            {(selectedReferencePhotoIndex ?? 0) + 1} / {duty.referencePhotos.length}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
