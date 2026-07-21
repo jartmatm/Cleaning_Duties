@@ -11,6 +11,31 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { notify } from "../../components/common/toast";
+import dataCleanAnimation from "../../assets/data-clean-lottie.json";
+
+function DataCleanLottiePreview() {
+  const { w, h } = dataCleanAnimation;
+
+  return (
+    <div className="relative h-44 w-44 sm:h-56 sm:w-56" aria-hidden="true">
+      <svg className="h-full w-full" viewBox={`0 0 ${w} ${h}`} role="img">
+        <g className="origin-center animate-[login-card-float_3s_ease-in-out_infinite]">
+          <rect x="101" y="96" width="98" height="98" rx="10" className="fill-slate-900" />
+          <rect x="100" y="96" width="98" height="98" rx="10" className="fill-white opacity-10" />
+        </g>
+        <g className="animate-[login-line-one_3s_ease-in-out_infinite]">
+          <rect x="115" y="114" width="90" height="15" rx="3" className="fill-slate-500" />
+        </g>
+        <g className="animate-[login-line-two_3s_ease-in-out_infinite]">
+          <rect x="115" y="143" width="85" height="15" rx="3" className="fill-slate-400" />
+        </g>
+        <g className="animate-[login-line-three_3s_ease-in-out_infinite]">
+          <rect x="115" y="172" width="98" height="15" rx="3" className="fill-slate-600" />
+        </g>
+      </svg>
+    </div>
+  );
+}
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -78,6 +103,9 @@ export function LoginPage() {
       <Card className="grid w-full gap-8 lg:grid-cols-2 lg:p-8">
         <div className="space-y-6 rounded-[2rem] bg-slate-50 p-8 text-slate-900 ring-1 ring-slate-200">
           <AppLogo />
+          <div className="flex justify-center">
+            <DataCleanLottiePreview />
+          </div>
           <div className="space-y-4">
             <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Secure access</p>
             <h1 className="text-4xl font-semibold tracking-tight">Manage cleaning operations with clarity.</h1>

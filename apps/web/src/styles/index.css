@@ -52,3 +52,53 @@ body {
     transform: translateY(0);
   }
 }
+
+@keyframes login-card-float {
+  0%,
+  100% {
+    transform: translateY(12px) scale(0.8);
+    opacity: 0.72;
+  }
+
+  45%,
+  65% {
+    transform: translateY(-18px) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes login-line-one {
+  0%,
+  100% {
+    transform: scaleX(0);
+  }
+
+  22%,
+  76% {
+    transform: scaleX(0.92);
+  }
+}
+
+@keyframes login-line-two {
+  0%,
+  100% {
+    transform: scaleX(0);
+  }
+
+  30%,
+  80% {
+    transform: scaleX(0.86);
+  }
+}
+
+@keyframes login-line-three {
+  0%,
+  100% {
+    transform: scaleX(0);
+  }
+
+  38%,
+  84% {
+    transform: scaleX(1);
+  }
+}
