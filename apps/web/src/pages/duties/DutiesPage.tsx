@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { CleanerDutyDetailModal } from "../../components/common/cleaner-duty-detail-modal";
+import { DutyStatusBadge } from "../../components/common/duty-status-badge";
 import { Input } from "../../components/ui/input";
 import { PageHeader } from "../../components/common/page-header";
 import { SectionTitle } from "../../components/common/section-title";
@@ -26,6 +27,10 @@ type ReferencePhotoItem = {
   status: "uploading" | "done" | "error";
   fileName: string;
 };
+
+type CleanerDutyFilter = "Pending" | DutyItem["status"] | "All";
+
+const CLEANER_DUTY_FILTERS: CleanerDutyFilter[] = ["Pending", "In Progress", "Completed", "Incomplete", "All"];
 
 function getInitials(name: string) {
   return name
@@ -50,6 +55,7 @@ export function DutiesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [referencePhotoItems, setReferencePhotoItems] = useState<ReferencePhotoItem[]>([]);
+  const [cleanerDutyFilter, setCleanerDutyFilter] = useState<CleanerDutyFilter>("Pending");
 
   const { data: sites = [] } = useQuery({
     queryKey: role === "Cleaner" ? ["sites", "cleaner", userId] : ["sites", companyId],
@@ -171,10 +177,21 @@ export function DutiesPage() {
   });
 
   const dutyCount = useMemo(() => duties.length, [duties]);
-  const visibleDuties = useMemo(
+  const siteDuties = useMemo(
     () => role === "Cleaner" ? duties.filter((duty) => duty.siteId === activeSiteId) : duties,
     [activeSiteId, duties, role],
   );
+  const visibleDuties = useMemo(() => {
+    if (role !== "Cleaner" || cleanerDutyFilter === "All") {
+      return siteDuties;
+    }
+
+    if (cleanerDutyFilter === "Pending") {
+      return siteDuties.filter((duty) => duty.status === "Pending" || duty.status === "Draft" || duty.status === "Overdue");
+    }
+
+    return siteDuties.filter((duty) => duty.status === cleanerDutyFilter);
+  }, [cleanerDutyFilter, role, siteDuties]);
   const assigneesById = useMemo(
     () => new Map(assignees.map((assignee) => [assignee.id, assignee])),
     [assignees],
@@ -405,7 +422,34 @@ export function DutiesPage() {
             </Button>
           ))}
         </div>
-        ) : null}
+        ) : (
+        <div className="flex flex-wrap gap-2">
+          {CLEANER_DUTY_FILTERS.map((filter) => {
+            const count = filter === "All"
+              ? siteDuties.length
+              : filter === "Pending"
+                ? siteDuties.filter((duty) => duty.status === "Pending" || duty.status === "Draft" || duty.status === "Overdue").length
+                : siteDuties.filter((duty) => duty.status === filter).length;
+            const isActive = cleanerDutyFilter === filter;
+
+            return (
+              <button
+                key={filter}
+                type="button"
+                onClick={() => setCleanerDutyFilter(filter)}
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition ${
+                  isActive
+                    ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                {filter === "All" ? <span>All</span> : <DutyStatusBadge status={filter === "Pending" ? "Pending" : filter} />}
+                <span className={isActive ? "text-white" : "text-slate-500"}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+        )}
       </Card>
 
       {role !== "Cleaner" && (showCreate || editingDuty) ? (
@@ -634,8 +678,8 @@ export function DutiesPage() {
           <Card className="p-5">Loading duties...</Card>
         ) : visibleDuties.length === 0 ? (
           <Card className="p-8 text-center">
-            <p className="text-lg font-semibold text-slate-950">No duties for this site</p>
-            <p className="mt-2 text-sm text-slate-500">{role === "Cleaner" ? "No assigned duties for the selected site." : "Create the first duty to start assigning cleaners and due dates."}</p>
+            <p className="text-lg font-semibold text-slate-950">{role === "Cleaner" ? "No duties match this filter" : "No duties for this site"}</p>
+            <p className="mt-2 text-sm text-slate-500">{role === "Cleaner" ? "Try another status filter for the selected site." : "Create the first duty to start assigning cleaners and due dates."}</p>
             {role !== "Cleaner" ? (
               <div className="mt-4">
               <Button onClick={startCreate} disabled={createMutation.isPending || updateMutation.isPending || deleteMutation.isPending}>
@@ -678,7 +722,7 @@ export function DutiesPage() {
                     <p className="text-lg font-semibold text-slate-950">{duty.title}</p>
                     <p className="mt-1 text-sm text-slate-500">{duty.description || "No description"}</p>
                   </div>
-                  <div className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{duty.status}</div>
+                  <DutyStatusBadge status={duty.status} />
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs font-medium text-slate-600">
                   <span className="rounded-full bg-slate-50 px-3 py-1 ring-1 ring-slate-200">{duty.priority}</span>
@@ -752,7 +796,7 @@ export function DutiesPage() {
         <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
           {DUTY_STATUSES.map((status) => (
             <div key={status} className="rounded-2xl bg-slate-50 p-4">
-              <p className="text-sm text-slate-500">{status}</p>
+              <DutyStatusBadge status={status} />
               <p className="mt-2 text-2xl font-semibold text-slate-950">{duties.filter((duty) => duty.status === status).length}</p>
             </div>
           ))}

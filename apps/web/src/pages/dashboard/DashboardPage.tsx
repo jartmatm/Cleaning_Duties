@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { CleanerDutyDetailModal } from "../../components/common/cleaner-duty-detail-modal";
+import { DutyStatusBadge } from "../../components/common/duty-status-badge";
 import { PageHeader } from "../../components/common/page-header";
 import { QuickActions } from "../../components/common/quick-actions";
 import { SectionTitle } from "../../components/common/section-title";
@@ -96,9 +97,12 @@ function ManagerDashboard() {
                 <div key={item.id} className="flex flex-col gap-2 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="font-medium text-slate-950">{item.title}</p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {item.priority} · {item.dueDate ? new Date(item.dueDate).toLocaleString() : "No due date"} · {item.status}
-                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                      <span>{item.priority}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{item.dueDate ? new Date(item.dueDate).toLocaleString() : "No due date"}</span>
+                      <DutyStatusBadge status={item.status} />
+                    </div>
                   </div>
                   <Button variant="secondary">Open</Button>
                 </div>
@@ -324,7 +328,7 @@ function DutyList(props: {
             <p className="mt-1 text-sm text-slate-500">
               {props.sites.get(duty.siteId)?.name ?? "Assigned site"} · {duty.priority} · {duty.dueDate ? new Date(duty.dueDate).toLocaleString() : "No due date"}
             </p>
-            <p className="mt-2 inline-flex rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">{duty.status}</p>
+            <DutyStatusBadge status={duty.status} className="mt-2" />
           </div>
           <Button variant="secondary" onClick={() => props.onOpen(duty)} disabled={props.isOpening}>
             Open

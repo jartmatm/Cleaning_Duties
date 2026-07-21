@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Camera, CheckCircle2, Loader2, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
+import { DutyStatusBadge } from "./duty-status-badge";
 import { notify } from "./toast";
 import { uploadDutyEvidencePhotos } from "../../services/duty-photo-service";
 import { addDutyComment, appendDutyEvidencePhotos, updateDutyStatus, type DutyItem } from "../../services/duties-service";
@@ -56,7 +57,10 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose }: CleanerD
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xl font-semibold text-slate-950">{duty.title}</p>
-            <p className="mt-1 text-sm text-slate-500">{site?.name ?? "Assigned site"} · {duty.status}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-sm text-slate-500">{site?.name ?? "Assigned site"}</span>
+              <DutyStatusBadge status={duty.status} />
+            </div>
           </div>
           <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Close duty detail">
             <X className="h-5 w-5" />
