@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type TouchEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type TouchEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, X } from "lucide-react";
 import { Button } from "../ui/button";
@@ -128,17 +128,17 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose }: CleanerD
               <p className="text-sm font-semibold text-slate-950">Reference Photos</p>
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{duty.referencePhotos.length}</span>
             </div>
-            <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 md:grid-cols-4">
+            <div className="-mx-1 flex snap-x flex-wrap gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0">
               {duty.referencePhotos.map((photoUrl, index) => (
                 <button
                   key={photoUrl}
                   type="button"
                   onClick={() => setSelectedReferencePhotoIndex(index)}
-                  className="group relative h-28 w-28 flex-none snap-start overflow-hidden rounded-2xl bg-slate-100 ring-1 ring-slate-200 transition hover:ring-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 sm:aspect-square sm:h-auto sm:w-auto"
+                  className="group relative h-14 w-14 flex-none snap-start overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200 transition hover:ring-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
                   aria-label={`Open reference photo ${index + 1}`}
                 >
                   <img src={photoUrl} alt={`Reference photo ${index + 1}`} className="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
-                  <span className="absolute bottom-2 right-2 rounded-full bg-slate-950/70 px-2 py-0.5 text-xs font-semibold text-white">{index + 1}</span>
+                  <span className="absolute bottom-1 right-1 rounded-full bg-slate-950/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">{index + 1}</span>
                 </button>
               ))}
             </div>
@@ -235,18 +235,50 @@ function InfoBlock(props: { label: string; value: string }) {
 }
 
 function PhotoPicker(props: { label: string; files: File[]; onChange: (files: File[]) => void }) {
+  const previews = useMemo(
+    () => props.files.map((file) => ({ file, previewUrl: URL.createObjectURL(file) })),
+    [props.files],
+  );
+
+  useEffect(() => {
+    return () => {
+      previews.forEach((preview) => URL.revokeObjectURL(preview.previewUrl));
+    };
+  }, [previews]);
+
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
-    props.onChange(Array.from(event.target.files ?? []));
+    const selectedFiles = Array.from(event.target.files ?? []);
+    event.target.value = "";
+
+    if (selectedFiles.length === 0) {
+      return;
+    }
+
+    props.onChange([...props.files, ...selectedFiles]);
   }
 
   return (
-    <label className="block cursor-pointer rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 transition hover:bg-slate-100">
-      <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
-        <Camera className="h-4 w-4" />
-        {props.label}
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-950">
+          <Camera className="h-4 w-4" />
+          {props.label}
+          <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handleChange} />
+        </label>
+        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+          {props.files.length} selected
+        </span>
       </div>
-      <p className="mt-2 text-sm text-slate-500">{props.files.length ? `${props.files.length} file${props.files.length === 1 ? "" : "s"} selected` : "Optional evidence upload"}</p>
-      <input type="file" accept="image/*" multiple className="hidden" onChange={handleChange} />
-    </label>
+      <p className="mt-2 text-sm text-slate-500">Tap again to add more photos from camera or gallery.</p>
+      {previews.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {previews.map((preview, index) => (
+            <div key={`${preview.file.name}-${preview.file.lastModified}-${index}`} className="relative h-10 w-10 overflow-hidden rounded-lg bg-white ring-1 ring-slate-200">
+              <img src={preview.previewUrl} alt={`${props.label} ${index + 1}`} className="h-full w-full object-cover" />
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
