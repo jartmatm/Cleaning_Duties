@@ -75,6 +75,20 @@ export async function listIncidentsForReporter(profileId: string) {
   return (data ?? []).map((row) => mapIncident(row as IncidentRow));
 }
 
+export async function listIncidentsForSite(siteId: string) {
+  const { data, error } = await supabase
+    .from("incidents")
+    .select("id, duty_id, site_id, reported_by, incident_type, details, resolved_at, created_at, updated_at")
+    .eq("site_id", siteId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map((row) => mapIncident(row as IncidentRow));
+}
+
 export async function createIncident(input: CreateIncidentInput) {
   const { data, error } = await supabase
     .from("incidents")

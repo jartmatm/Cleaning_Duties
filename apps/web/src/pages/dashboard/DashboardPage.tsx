@@ -1,5 +1,6 @@
 import { INCIDENT_TYPES, type IncidentType } from "@cleaning-duties/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { arc, pie, type PieArcDatum } from "d3";
 import { Bell, CheckCircle2, CircleAlert, ClipboardList, ListTodo, Loader2, Send, Sparkles, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -14,7 +15,7 @@ import { StatCard } from "../../components/common/stat-card";
 import { notify } from "../../components/common/toast";
 import { useSession } from "../../hooks/use-session";
 import { listAssignedDuties, listDuties, updateDutyStatus, type DutyItem } from "../../services/duties-service";
-import { createIncident, listIncidentsForReporter } from "../../services/incidents-service";
+import { createIncident, listIncidentsForReporter, listIncidentsForSite } from "../../services/incidents-service";
 import { listNotifications } from "../../services/notifications-service";
 import { listMySites, listSites, type SiteItem } from "../../services/sites-service";
 
@@ -29,6 +30,32 @@ const filterTitles: Record<CleanerFilter, string> = {
 
 function isPendingDuty(duty: DutyItem) {
   return duty.status === "Pending" || duty.status === "Draft" || duty.status === "Overdue";
+}
+
+function isThisWeek(dateValue: string | null) {
+  if (!dateValue) {
+    return false;
+  }
+
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(now.getDate() - now.getDay());
+
+  return date >= weekStart && date <= now;
+}
+
+function percent(value: number, total: number) {
+  if (total === 0) {
+    return 0;
+  }
+
+  return Number(((value / total) * 100).toFixed(1));
 }
 
 function ManagerDashboard() {
@@ -50,16 +77,28 @@ function ManagerDashboard() {
     queryFn: () => listDuties(activeSite?.id ?? ""),
     enabled: Boolean(activeSite?.id),
   });
+  const { data: incidents = [] } = useQuery({
+    queryKey: ["dashboard-incidents", activeSite?.id],
+    queryFn: () => listIncidentsForSite(activeSite?.id ?? ""),
+    enabled: Boolean(activeSite?.id),
+  });
 
-  const reportRows = useMemo(
-    () => [
-      { label: "Completion rate", value: 92, color: "bg-emerald-500" },
-      { label: "On-time duties", value: 87, color: "bg-sky-500" },
-      { label: "Open incidents", value: 14, color: "bg-amber-500" },
-      { label: "Cleaner coverage", value: 76, color: "bg-slate-900" },
-    ],
-    [],
-  );
+  const weeklyReportData = useMemo(() => {
+    const weeklyDuties = duties.filter((duty) => isThisWeek(duty.createdAt) || isThisWeek(duty.dueDate));
+    const reportDuties = weeklyDuties.length > 0 ? weeklyDuties : duties;
+    const completedDuties = reportDuties.filter((duty) => duty.status === "Completed");
+    const onTimeDuties = completedDuties.filter((duty) => !duty.dueDate || new Date(duty.updatedAt) <= new Date(duty.dueDate));
+    const activeDuties = reportDuties.filter((duty) => duty.status !== "Completed");
+    const weeklyIncidents = incidents.filter((incident) => isThisWeek(incident.createdAt));
+    const openIncidents = weeklyIncidents.filter((incident) => !incident.resolvedAt);
+
+    return [
+      { key: "Completion rate", value: percent(completedDuties.length, reportDuties.length) },
+      { key: "On-time completion", value: percent(onTimeDuties.length, completedDuties.length) },
+      { key: "Active workload", value: percent(activeDuties.length, reportDuties.length) },
+      { key: "Open incidents", value: openIncidents.length },
+    ];
+  }, [duties, incidents]);
 
   return (
     <div className="space-y-8 fade-in">
@@ -83,7 +122,7 @@ function ManagerDashboard() {
         <StatCard label="Pending Duties" value={String(duties.filter((duty) => duty.status !== "Completed").length)} detail="Across the selected site" accent={<ListTodo className="h-5 w-5" />} />
         <StatCard label="Completed Today" value={String(duties.filter((duty) => duty.status === "Completed").length)} detail="For the active site" accent={<Sparkles className="h-5 w-5" />} />
         <StatCard label="Overdue" value={String(duties.filter((duty) => duty.status === "Overdue").length)} detail="Needs manager review" accent={<CircleAlert className="h-5 w-5" />} />
-        <StatCard label="Incidents" value="2" detail="Open this week" accent={<Bell className="h-5 w-5" />} />
+        <StatCard label="Incidents" value={String(incidents.filter((incident) => isThisWeek(incident.createdAt) && !incident.resolvedAt).length)} detail="Open this week" accent={<Bell className="h-5 w-5" />} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
@@ -133,20 +172,35 @@ function ManagerDashboard() {
 
       <Card className="space-y-4 p-5">
         <SectionTitle title="Weekly reports" description="A quick operating view for managers and owners." />
-        <div className="space-y-4">
-          {reportRows.map((row) => (
-            <div key={row.label} className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-slate-700">{row.label}</span>
-                <span className="text-slate-500">{row.value}%</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                <div className={`h-full rounded-full ${row.color}`} style={{ width: `${row.value}%` }} />
-              </div>
-            </div>
-          ))}
-        </div>
+        <BarChartBenchmark data={weeklyReportData} />
       </Card>
+    </div>
+  );
+}
+
+function BarChartBenchmark({ data }: { data: Array<{ key: string; value: number }> }) {
+  const maxValue = Math.max(...data.map((item) => item.value), 1);
+
+  return (
+    <div className="grid w-full gap-4 py-4">
+      {data.map((item, index) => (
+        <div key={item.key} className="grid gap-2 md:grid-cols-[10rem_1fr] md:items-center">
+          <div className={`text-sm whitespace-nowrap ${index === 0 ? "bg-lime-500 text-transparent bg-clip-text" : "text-gray-500"}`}>
+            {item.key}
+          </div>
+          <div className="flex items-center gap-2.5">
+            <div className="relative h-3 w-full overflow-hidden rounded-sm bg-gray-200">
+              <div
+                className={`absolute inset-y-0 left-0 rounded-r-sm bg-gradient-to-r ${index === 0 ? "from-lime-300 to-teal-300" : "from-zinc-400 to-gray-400"}`}
+                style={{ width: `${(item.value / maxValue) * 100}%` }}
+              />
+            </div>
+            <div className={`text-sm whitespace-nowrap tabular-nums ${index === 0 ? "bg-teal-400 text-transparent bg-clip-text" : "text-gray-500"}`}>
+              {item.value}
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -214,6 +268,8 @@ function CleanerDashboard() {
     () => (activeSite ? incidents.filter((incident) => incident.siteId === activeSite.id) : incidents),
     [activeSite, incidents],
   );
+  const completedDutiesCount = siteDuties.filter((duty) => duty.status === "Completed").length;
+  const remainingDutiesCount = Math.max(siteDuties.length - completedDutiesCount, 0);
 
   return (
     <div className="space-y-8 fade-in">
@@ -241,6 +297,10 @@ function CleanerDashboard() {
         </Card>
 
         <div className="space-y-6">
+          <Card className="space-y-4 p-5">
+            <SectionTitle title="Duty progress" description="Completed duties compared with what remains for this site." />
+            <DonutChartFillable completed={completedDutiesCount} remaining={remainingDutiesCount} />
+          </Card>
           <Card className="space-y-4 p-5">
             <div>
               <p className="text-sm font-medium text-slate-950">Quick actions</p>
@@ -272,6 +332,83 @@ function CleanerDashboard() {
           onClose={() => setIsIncidentOpen(false)}
         />
       ) : null}
+    </div>
+  );
+}
+
+type DonutItem = { name: string; value: number };
+
+function DonutChartFillable({ completed, remaining }: { completed: number; remaining: number }) {
+  const radius = 420;
+  const lightStrokeEffect = 10;
+  const total = completed + remaining;
+  const progress = percent(completed, total);
+  const data: DonutItem[] = total > 0
+    ? [
+        { name: "Completed", value: completed },
+        { name: "Remaining", value: remaining },
+      ]
+    : [
+        { name: "Completed", value: 0 },
+        { name: "Remaining", value: 1 },
+      ];
+
+  const pieLayout = pie<DonutItem>()
+    .value((item) => item.value)
+    .startAngle(0)
+    .endAngle(2 * Math.PI)
+    .sort(null)
+    .padAngle(0);
+  const innerRadius = radius / 1.625;
+  const arcGenerator = arc<PieArcDatum<DonutItem>>().innerRadius(innerRadius).outerRadius(radius);
+  const arcClip = arc<PieArcDatum<DonutItem>>()
+    .innerRadius(innerRadius + lightStrokeEffect / 2)
+    .outerRadius(radius)
+    .cornerRadius(lightStrokeEffect + 2);
+  const arcs = pieLayout(data);
+
+  return (
+    <div className="space-y-4">
+      <div className="relative">
+        <svg viewBox={`-${radius} -${radius} ${radius * 2} ${radius * 2}`} className="mx-auto max-w-[16rem] overflow-visible">
+          <defs>
+            {arcs.map((slice) => (
+              <clipPath key={`cleaner-duty-donut-clip-${slice.data.name}`} id={`cleaner-duty-donut-clip-${slice.data.name}`}>
+                <path d={arcClip(slice) || undefined} />
+              </clipPath>
+            ))}
+          </defs>
+          <g>
+            {arcs.map((slice, index) => (
+              <g key={slice.data.name} clipPath={`url(#cleaner-duty-donut-clip-${slice.data.name})`}>
+                <path
+                  className={`stroke-white/30 ${index === 0 ? "fill-emerald-600" : "fill-zinc-200"}`}
+                  strokeWidth={lightStrokeEffect}
+                  d={arcGenerator(slice) || undefined}
+                />
+              </g>
+            ))}
+          </g>
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-lg font-semibold leading-5 text-slate-950">Completed</span>
+          <div className="text-xl font-bold">
+            <span className="text-emerald-600">{completed}</span>
+            <span className="text-zinc-400"> / {total}</span>
+          </div>
+          <span className="mt-1 text-xs font-semibold text-slate-500">{progress}%</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="rounded-2xl bg-emerald-50 px-3 py-2 text-emerald-800">
+          <p className="text-xs font-semibold uppercase">Completed</p>
+          <p className="mt-1 text-lg font-bold">{completed}</p>
+        </div>
+        <div className="rounded-2xl bg-slate-50 px-3 py-2 text-slate-700">
+          <p className="text-xs font-semibold uppercase">Remaining</p>
+          <p className="mt-1 text-lg font-bold">{remaining}</p>
+        </div>
+      </div>
     </div>
   );
 }
