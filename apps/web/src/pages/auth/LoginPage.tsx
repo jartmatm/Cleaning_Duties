@@ -1,4 +1,3 @@
-import { AppLogo } from "../../components/common/app-logo";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
@@ -102,7 +101,6 @@ export function LoginPage() {
     <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-6xl items-center justify-center">
       <Card className="grid w-full gap-8 lg:grid-cols-2 lg:p-8">
         <div className="space-y-6 rounded-[2rem] bg-slate-50 p-8 text-slate-900 ring-1 ring-slate-200">
-          <AppLogo />
           <div className="flex justify-center">
             <DataCleanLottiePreview />
           </div>
