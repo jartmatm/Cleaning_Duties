@@ -296,7 +296,7 @@ function CleanerDashboard() {
           )}
         </Card>
 
-        <div className="space-y-6">
+        <div className="order-first space-y-6 xl:order-none">
           <Card className="space-y-4 p-5">
             <SectionTitle title="Duty progress" description="Completed duties compared with what remains for this site." />
             <DonutChartFillable completed={completedDutiesCount} remaining={remainingDutiesCount} />

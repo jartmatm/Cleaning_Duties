@@ -123,18 +123,22 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose }: CleanerD
         </div>
 
         {duty.referencePhotos.length > 0 ? (
-          <div className="mt-5 space-y-3">
-            <p className="text-sm font-semibold text-slate-950">Reference Photos</p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+          <div className="mt-5 space-y-3 rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-slate-950">Reference Photos</p>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{duty.referencePhotos.length}</span>
+            </div>
+            <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 md:grid-cols-4">
               {duty.referencePhotos.map((photoUrl, index) => (
                 <button
                   key={photoUrl}
                   type="button"
                   onClick={() => setSelectedReferencePhotoIndex(index)}
-                  className="group relative aspect-square overflow-hidden rounded-2xl bg-slate-100 ring-1 ring-slate-200 transition hover:ring-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="group relative h-28 w-28 flex-none snap-start overflow-hidden rounded-2xl bg-slate-100 ring-1 ring-slate-200 transition hover:ring-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 sm:aspect-square sm:h-auto sm:w-auto"
                   aria-label={`Open reference photo ${index + 1}`}
                 >
                   <img src={photoUrl} alt={`Reference photo ${index + 1}`} className="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
+                  <span className="absolute bottom-2 right-2 rounded-full bg-slate-950/70 px-2 py-0.5 text-xs font-semibold text-white">{index + 1}</span>
                 </button>
               ))}
             </div>
@@ -171,7 +175,7 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose }: CleanerD
 
       {selectedReferencePhoto ? (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950 p-4"
+          className="fixed inset-0 z-[60] flex touch-none items-center justify-center bg-slate-950 p-3 sm:p-4"
           onTouchStart={(event) => setTouchStartX(event.touches[0]?.clientX ?? null)}
           onTouchEnd={handleReferencePhotoTouchEnd}
           role="dialog"
@@ -181,7 +185,7 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose }: CleanerD
           <button
             type="button"
             onClick={() => setSelectedReferencePhotoIndex(null)}
-            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20"
+            className="absolute right-4 top-4 z-10 rounded-full bg-white/15 p-3 text-white transition hover:bg-white/25"
             aria-label="Close reference photo viewer"
           >
             <X className="h-6 w-6" />
@@ -190,7 +194,7 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose }: CleanerD
             <button
               type="button"
               onClick={showPreviousReferencePhoto}
-              className="absolute left-4 top-1/2 hidden -translate-y-1/2 rounded-full bg-white/10 p-3 text-white transition hover:bg-white/20 sm:block"
+              className="absolute left-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/15 p-3 text-white transition hover:bg-white/25"
               aria-label="Previous reference photo"
             >
               <ChevronLeft className="h-7 w-7" />
@@ -199,20 +203,20 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose }: CleanerD
           <img
             src={selectedReferencePhoto}
             alt={`Reference photo ${(selectedReferencePhotoIndex ?? 0) + 1}`}
-            className="max-h-[82vh] max-w-full select-none rounded-2xl object-contain"
+            className="max-h-[78dvh] w-full max-w-full select-none rounded-2xl object-contain sm:max-h-[82vh]"
             draggable={false}
           />
           {duty.referencePhotos.length > 1 ? (
             <button
               type="button"
               onClick={showNextReferencePhoto}
-              className="absolute right-4 top-1/2 hidden -translate-y-1/2 rounded-full bg-white/10 p-3 text-white transition hover:bg-white/20 sm:block"
+              className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/15 p-3 text-white transition hover:bg-white/25"
               aria-label="Next reference photo"
             >
               <ChevronRight className="h-7 w-7" />
             </button>
           ) : null}
-          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white">
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white">
             {(selectedReferencePhotoIndex ?? 0) + 1} / {duty.referencePhotos.length}
           </div>
         </div>
