@@ -5,7 +5,7 @@ import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { notify } from "./toast";
 import { uploadDutyEvidencePhotos } from "../../services/duty-photo-service";
-import { appendDutyEvidencePhotos, updateDutyStatus, type DutyItem } from "../../services/duties-service";
+import { addDutyComment, appendDutyEvidencePhotos, updateDutyStatus, type DutyItem } from "../../services/duties-service";
 import type { SiteItem } from "../../services/sites-service";
 
 type CleanerDutyDetailModalProps = {
@@ -19,6 +19,7 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose }: CleanerD
   const queryClient = useQueryClient();
   const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
   const [afterFiles, setAfterFiles] = useState<File[]>([]);
+  const [comment, setComment] = useState("");
 
   const completeMutation = useMutation({
     mutationFn: async () => {
@@ -37,6 +38,7 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose }: CleanerD
       if (beforeUrls.length > 0 || afterUrls.length > 0) {
         await appendDutyEvidencePhotos({ dutyId: duty.id, beforePhotos: beforeUrls, afterPhotos: afterUrls });
       }
+      await addDutyComment({ dutyId: duty.id, profileId: userId, body: comment });
       return updateDutyStatus(duty.id, "Completed");
     },
     onSuccess: async () => {
@@ -75,6 +77,20 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose }: CleanerD
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <PhotoPicker label="Before photos" files={beforeFiles} onChange={setBeforeFiles} />
           <PhotoPicker label="After photos" files={afterFiles} onChange={setAfterFiles} />
+        </div>
+
+        <div className="mt-5 space-y-2">
+          <label className="text-sm font-semibold text-slate-950" htmlFor="duty-completion-comment">
+            Comments
+          </label>
+          <textarea
+            id="duty-completion-comment"
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            rows={4}
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+            placeholder="Add any updates, issues, or notes about this duty."
+          />
         </div>
 
         <div className="mt-6 flex flex-wrap justify-end gap-3">

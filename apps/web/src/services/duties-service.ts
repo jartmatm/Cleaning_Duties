@@ -256,6 +256,30 @@ export async function appendDutyEvidencePhotos(params: {
   return mapDuty(data as DutyRow);
 }
 
+export async function addDutyComment(params: {
+  dutyId: string;
+  profileId: string;
+  body: string;
+}) {
+  const body = params.body.trim();
+
+  if (!body) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from("duty_comments")
+    .insert({
+      duty_id: params.dutyId,
+      profile_id: params.profileId,
+      body,
+    });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 export async function deleteDuty(dutyId: string) {
   const { data, error } = await supabase.from("cleaning_duties").delete().eq("id", dutyId).select("id").maybeSingle();
 
