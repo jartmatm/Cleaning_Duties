@@ -2,7 +2,7 @@ import { INCIDENT_TYPES, type IncidentType } from "@cleaning-duties/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { arc, pie, type PieArcDatum } from "d3";
 import { Bell, CheckCircle2, CircleAlert, ClipboardList, ListTodo, Loader2, Send, Sparkles, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
@@ -208,7 +208,7 @@ function BarChartBenchmark({ data }: { data: Array<{ key: string; value: number 
 function CleanerDashboard() {
   const queryClient = useQueryClient();
   const { userId, companyName, activeSiteId } = useSession();
-  const [activeFilter, setActiveFilter] = useState<CleanerFilter>("pending");
+  const [activeFilter, setActiveFilter] = useState<CleanerFilter>("in-progress");
   const [selectedDuty, setSelectedDuty] = useState<DutyItem | null>(null);
   const [isIncidentOpen, setIsIncidentOpen] = useState(false);
 
@@ -246,8 +246,20 @@ function CleanerDashboard() {
     onError: (error) => notify({ tone: "error", title: "Could not open duty", message: error instanceof Error ? error.message : "Unknown error" }),
   });
 
+  const siteDuties = useMemo(
+    () => (activeSite ? duties.filter((duty) => duty.siteId === activeSite.id) : duties),
+    [activeSite, duties],
+  );
+
+  useEffect(() => {
+    const hasInProgressDuties = siteDuties.some((duty) => duty.status === "In Progress");
+
+    if (activeFilter === "in-progress" && !hasInProgressDuties) {
+      setActiveFilter("pending");
+    }
+  }, [activeFilter, siteDuties]);
+
   const displayedDuties = useMemo(() => {
-    const siteDuties = activeSite ? duties.filter((duty) => duty.siteId === activeSite.id) : duties;
     if (activeFilter === "pending") {
       return siteDuties.filter(isPendingDuty);
     }
@@ -258,12 +270,7 @@ function CleanerDashboard() {
       return siteDuties.filter((duty) => duty.status === "Completed");
     }
     return [];
-  }, [activeFilter, activeSite, duties]);
-
-  const siteDuties = useMemo(
-    () => (activeSite ? duties.filter((duty) => duty.siteId === activeSite.id) : duties),
-    [activeSite, duties],
-  );
+  }, [activeFilter, siteDuties]);
   const siteIncidents = useMemo(
     () => (activeSite ? incidents.filter((incident) => incident.siteId === activeSite.id) : incidents),
     [activeSite, incidents],
