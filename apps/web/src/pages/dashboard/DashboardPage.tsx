@@ -2,7 +2,7 @@ import { INCIDENT_TYPES, type IncidentType } from "@cleaning-duties/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { arc, pie, type PieArcDatum } from "d3";
 import { Bell, CheckCircle2, CircleAlert, ClipboardList, ListTodo, Loader2, Send, Sparkles, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
@@ -208,6 +208,7 @@ function BarChartBenchmark({ data }: { data: Array<{ key: string; value: number 
 function CleanerDashboard() {
   const queryClient = useQueryClient();
   const { userId, companyName, activeSiteId } = useSession();
+  const cleanerWorkSectionRef = useRef<HTMLDivElement | null>(null);
   const [activeFilter, setActiveFilter] = useState<CleanerFilter>("in-progress");
   const [selectedDuty, setSelectedDuty] = useState<DutyItem | null>(null);
   const [isIncidentOpen, setIsIncidentOpen] = useState(false);
@@ -278,6 +279,13 @@ function CleanerDashboard() {
   const completedDutiesCount = siteDuties.filter((duty) => duty.status === "Completed").length;
   const remainingDutiesCount = Math.max(siteDuties.length - completedDutiesCount, 0);
 
+  function handleKpiClick(filter: CleanerFilter) {
+    setActiveFilter(filter);
+    window.requestAnimationFrame(() => {
+      cleanerWorkSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
   return (
     <div className="space-y-8 fade-in">
       <PageHeader
@@ -287,21 +295,23 @@ function CleanerDashboard() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiButton active={activeFilter === "pending"} label="Pending Duties" value={String(siteDuties.filter(isPendingDuty).length)} detail="Ready to start" icon={<ListTodo className="h-5 w-5" />} onClick={() => setActiveFilter("pending")} />
-        <KpiButton active={activeFilter === "in-progress"} label="In Progress" value={String(siteDuties.filter((duty) => duty.status === "In Progress").length)} detail="Currently open" icon={<Loader2 className="h-5 w-5" />} onClick={() => setActiveFilter("in-progress")} />
-        <KpiButton active={activeFilter === "completed"} label="Completed" value={String(siteDuties.filter((duty) => duty.status === "Completed").length)} detail="Finished duties" icon={<CheckCircle2 className="h-5 w-5" />} onClick={() => setActiveFilter("completed")} />
-        <KpiButton active={activeFilter === "incidents"} label="Incidents" value={String(siteIncidents.length)} detail="Reported by you" icon={<CircleAlert className="h-5 w-5" />} onClick={() => setActiveFilter("incidents")} />
+        <KpiButton active={activeFilter === "pending"} label="Pending Duties" value={String(siteDuties.filter(isPendingDuty).length)} detail="Ready to start" icon={<ListTodo className="h-5 w-5" />} onClick={() => handleKpiClick("pending")} />
+        <KpiButton active={activeFilter === "in-progress"} label="In Progress" value={String(siteDuties.filter((duty) => duty.status === "In Progress").length)} detail="Currently open" icon={<Loader2 className="h-5 w-5" />} onClick={() => handleKpiClick("in-progress")} />
+        <KpiButton active={activeFilter === "completed"} label="Completed" value={String(siteDuties.filter((duty) => duty.status === "Completed").length)} detail="Finished duties" icon={<CheckCircle2 className="h-5 w-5" />} onClick={() => handleKpiClick("completed")} />
+        <KpiButton active={activeFilter === "incidents"} label="Incidents" value={String(siteIncidents.length)} detail="Reported by you" icon={<CircleAlert className="h-5 w-5" />} onClick={() => handleKpiClick("incidents")} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-        <Card className="space-y-6 p-5">
-          <SectionTitle title={filterTitles[activeFilter]} description={activeFilter === "incidents" ? "Incident reports submitted from your cleaner profile." : "Open a duty to start work, upload evidence, or complete it."} />
-          {activeFilter === "incidents" ? (
-            <IncidentList incidents={siteIncidents} sites={siteById} />
-          ) : (
-            <DutyList duties={displayedDuties} sites={siteById} isLoading={isLoadingDuties} onOpen={(duty) => openDutyMutation.mutate(duty)} isOpening={openDutyMutation.isPending} />
-          )}
-        </Card>
+        <div ref={cleanerWorkSectionRef} className="scroll-mt-6">
+          <Card className="space-y-6 p-5">
+            <SectionTitle title={filterTitles[activeFilter]} description={activeFilter === "incidents" ? "Incident reports submitted from your cleaner profile." : "Open a duty to start work, upload evidence, or complete it."} />
+            {activeFilter === "incidents" ? (
+              <IncidentList incidents={siteIncidents} sites={siteById} />
+            ) : (
+              <DutyList duties={displayedDuties} sites={siteById} isLoading={isLoadingDuties} onOpen={(duty) => openDutyMutation.mutate(duty)} isOpening={openDutyMutation.isPending} />
+            )}
+          </Card>
+        </div>
 
         <div className="order-first space-y-6 xl:order-none">
           <Card className="space-y-4 p-5">

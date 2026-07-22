@@ -1,6 +1,6 @@
 import { Loader2, Plus, Search, Trash2, Pencil } from "lucide-react";
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -18,6 +18,7 @@ import { notify } from "../../components/common/toast";
 export function SitesPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { companyId, userId, role, setActiveSiteId } = useSession();
   const isCleaner = role === "Cleaner";
   const [search, setSearch] = useState("");
@@ -92,6 +93,18 @@ export function SitesPage() {
     setShowCreate(true);
     form.reset({ name: "", address: "", notes: "" });
   }
+
+  useEffect(() => {
+    if (isCleaner || searchParams.get("create") !== "1") {
+      return;
+    }
+
+    startCreate();
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("create");
+    setSearchParams(nextParams, { replace: true });
+  }, [isCleaner, searchParams, setSearchParams]);
 
   function startEdit(site: SiteItem) {
     setShowCreate(false);

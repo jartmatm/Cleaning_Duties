@@ -112,11 +112,11 @@ export function LoginPage() {
         </div>
         <form className="space-y-4 p-2 lg:p-4" onSubmit={handleSubmit(onSubmit)}>
           <div>
-            <label className="mb-2 block text-sm font-medium">Email or phone</label>
+            <label className="mb-2 block text-sm font-medium text-black">Email or phone</label>
             <Input placeholder="you@company.com" {...register("identifier")} />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium">Password</label>
+            <label className="mb-2 block text-sm font-medium text-black">Password</label>
             <Input type="password" placeholder="••••••••" {...register("password")} />
           </div>
           <div className="flex items-center justify-between text-sm text-slate-600">

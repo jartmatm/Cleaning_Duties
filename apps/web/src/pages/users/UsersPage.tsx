@@ -1,5 +1,6 @@
 import { Loader2, MailPlus, UserRoundPlus, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -61,6 +62,7 @@ function getInviteErrorMessage(body: unknown, response: Response) {
 
 export function UsersPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { companyId, role } = useSession();
   const isCleaner = role === "Cleaner";
   const [isInviteOpen, setIsInviteOpen] = useState(false);
@@ -96,6 +98,18 @@ export function UsersPage() {
   const siteCountLabel = useMemo(() => {
     return sites.length > 0 ? `${sites.length} available site${sites.length === 1 ? "" : "s"}` : "No sites available";
   }, [sites.length]);
+
+  useEffect(() => {
+    if (isCleaner || searchParams.get("invite") !== "1") {
+      return;
+    }
+
+    setIsInviteOpen(true);
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("invite");
+    setSearchParams(nextParams, { replace: true });
+  }, [isCleaner, searchParams, setSearchParams]);
 
   async function onSubmit(values: InviteCleanerInput) {
     try {

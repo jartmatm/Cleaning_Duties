@@ -29,8 +29,12 @@ type ReferencePhotoItem = {
 };
 
 type CleanerDutyFilter = "Pending" | DutyItem["status"] | "All";
+type ManagerPriorityFilter = DutyItem["priority"] | "All";
+type ManagerStatusFilter = DutyItem["status"] | "All";
 
 const CLEANER_DUTY_FILTERS: CleanerDutyFilter[] = ["Pending", "In Progress", "Completed", "Incomplete", "All"];
+const MANAGER_PRIORITY_FILTERS: ManagerPriorityFilter[] = ["All", ...DUTY_PRIORITIES];
+const MANAGER_STATUS_FILTERS: ManagerStatusFilter[] = ["All", ...DUTY_STATUSES];
 
 function getInitials(name: string) {
   return name
@@ -47,6 +51,7 @@ export function DutiesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { companyId, userId, role, activeSiteId: sessionActiveSiteId, setActiveSiteId: setSessionActiveSiteId } = useSession();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const dutyListRef = useRef<HTMLDivElement | null>(null);
   const [search, setSearch] = useState("");
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [editingDuty, setEditingDuty] = useState<DutyItem | null>(null);
@@ -56,6 +61,8 @@ export function DutiesPage() {
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [referencePhotoItems, setReferencePhotoItems] = useState<ReferencePhotoItem[]>([]);
   const [cleanerDutyFilter, setCleanerDutyFilter] = useState<CleanerDutyFilter>("Pending");
+  const [managerPriorityFilter, setManagerPriorityFilter] = useState<ManagerPriorityFilter>("All");
+  const [managerStatusFilter, setManagerStatusFilter] = useState<ManagerStatusFilter>("All");
 
   const { data: sites = [] } = useQuery({
     queryKey: role === "Cleaner" ? ["sites", "cleaner", userId] : ["sites", companyId],
@@ -182,7 +189,16 @@ export function DutiesPage() {
     [activeSiteId, duties, role],
   );
   const visibleDuties = useMemo(() => {
-    if (role !== "Cleaner" || cleanerDutyFilter === "All") {
+    if (role !== "Cleaner") {
+      return siteDuties.filter((duty) => {
+        const matchesPriority = managerPriorityFilter === "All" || duty.priority === managerPriorityFilter;
+        const matchesStatus = managerStatusFilter === "All" || duty.status === managerStatusFilter;
+
+        return matchesPriority && matchesStatus;
+      });
+    }
+
+    if (cleanerDutyFilter === "All") {
       return siteDuties;
     }
 
@@ -191,7 +207,7 @@ export function DutiesPage() {
     }
 
     return siteDuties.filter((duty) => duty.status === cleanerDutyFilter);
-  }, [cleanerDutyFilter, role, siteDuties]);
+  }, [cleanerDutyFilter, managerPriorityFilter, managerStatusFilter, role, siteDuties]);
   const assigneesById = useMemo(
     () => new Map(assignees.map((assignee) => [assignee.id, assignee])),
     [assignees],
@@ -346,6 +362,22 @@ export function DutiesPage() {
     await createMutation.mutateAsync(values);
   }
 
+  function scrollToDutyList() {
+    window.requestAnimationFrame(() => {
+      dutyListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  function handleManagerPriorityFilter(priority: ManagerPriorityFilter) {
+    setManagerPriorityFilter(priority);
+    scrollToDutyList();
+  }
+
+  function handleManagerStatusFilter(status: ManagerStatusFilter) {
+    setManagerStatusFilter(status);
+    scrollToDutyList();
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -410,17 +442,52 @@ export function DutiesPage() {
           </div>
         </div>
         {role !== "Cleaner" ? (
-        <div className="flex flex-wrap gap-2">
-          {DUTY_PRIORITIES.map((priority) => (
-            <Button key={priority} variant="secondary">
-              {priority}
-            </Button>
-          ))}
-          {DUTY_STATUSES.slice(0, 4).map((status) => (
-            <Button key={status} variant="ghost">
-              {status}
-            </Button>
-          ))}
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {MANAGER_PRIORITY_FILTERS.map((priority) => {
+              const isActive = managerPriorityFilter === priority;
+
+              return (
+                <Button
+                  key={priority}
+                  type="button"
+                  variant={isActive ? "primary" : "secondary"}
+                  onClick={() => handleManagerPriorityFilter(priority)}
+                >
+                  {priority === "All" ? "All priorities" : priority}
+                </Button>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {MANAGER_STATUS_FILTERS.map((status) => {
+              const isActive = managerStatusFilter === status;
+
+              return status === "All" ? (
+                <Button
+                  key={status}
+                  type="button"
+                  variant={isActive ? "primary" : "ghost"}
+                  onClick={() => handleManagerStatusFilter(status)}
+                >
+                  All statuses
+                </Button>
+              ) : (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => handleManagerStatusFilter(status)}
+                  className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${
+                    isActive
+                      ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                >
+                  <DutyStatusBadge status={status} />
+                </button>
+              );
+            })}
+          </div>
         </div>
         ) : (
         <div className="flex flex-wrap gap-2">
@@ -673,13 +740,13 @@ export function DutiesPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div ref={dutyListRef} className="grid scroll-mt-6 gap-4 xl:grid-cols-2">
         {isLoading ? (
           <Card className="p-5">Loading duties...</Card>
         ) : visibleDuties.length === 0 ? (
           <Card className="p-8 text-center">
-            <p className="text-lg font-semibold text-slate-950">{role === "Cleaner" ? "No duties match this filter" : "No duties for this site"}</p>
-            <p className="mt-2 text-sm text-slate-500">{role === "Cleaner" ? "Try another status filter for the selected site." : "Create the first duty to start assigning cleaners and due dates."}</p>
+            <p className="text-lg font-semibold text-slate-950">{role === "Cleaner" || siteDuties.length > 0 ? "No duties match this filter" : "No duties for this site"}</p>
+            <p className="mt-2 text-sm text-slate-500">{role === "Cleaner" || siteDuties.length > 0 ? "Try another filter for the selected site." : "Create the first duty to start assigning cleaners and due dates."}</p>
             {role !== "Cleaner" ? (
               <div className="mt-4">
               <Button onClick={startCreate} disabled={createMutation.isPending || updateMutation.isPending || deleteMutation.isPending}>

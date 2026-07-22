@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useSession } from "../hooks/use-session";
 import { AppLayout } from "../layouts/AppLayout";
 import { AuthLayout } from "../layouts/AuthLayout";
@@ -17,16 +17,21 @@ import { getCompanySettings } from "../services/company-service";
 import { supabase } from "../services/supabase-client";
 import { ToastViewport } from "../components/common/toast";
 import { SettingsPage } from "../pages/settings/SettingsPage";
+import { AppLoader } from "../components/common/app-loader";
 
 const queryClient = new QueryClient();
 
 export function App() {
-  const { setSession, setEmail, clearSession } = useSession();
+  const { setSession, setEmail, clearSession, setSessionLoading } = useSession();
 
   useEffect(() => {
     let mounted = true;
 
-    async function syncSession() {
+    async function syncSession(showLoader = false) {
+      if (showLoader) {
+        setSessionLoading(true);
+      }
+
       const { data } = await supabase.auth.getSession();
       const session = data.session;
 
@@ -57,7 +62,7 @@ export function App() {
       setEmail(session.user.email ?? session.user.phone ?? null);
     }
 
-    syncSession().catch(() => {
+    syncSession(true).catch(() => {
       if (mounted) {
         clearSession();
       }
@@ -74,6 +79,7 @@ export function App() {
       }
 
       void (async () => {
+        setSessionLoading(true);
         const profile = await getCurrentProfile(session.user.id);
         const company = await getCompanySettings(profile.company_id);
         if (!mounted) {
@@ -92,16 +98,46 @@ export function App() {
       })();
     });
 
+    function handleAppResume() {
+      void syncSession(true).catch(() => {
+        if (mounted) {
+          clearSession();
+        }
+      });
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        handleAppResume();
+      }
+    }
+
+    window.addEventListener("focus", handleAppResume);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       mounted = false;
+      window.removeEventListener("focus", handleAppResume);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       data.subscription.unsubscribe();
     };
-  }, [clearSession, setEmail, setSession]);
+  }, [clearSession, setEmail, setSession, setSessionLoading]);
 
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ToastViewport />
+        <AppRoutes />
+      </BrowserRouter>
+    </QueryClientProvider>
+  );
+}
+
+function AppRoutes() {
+  return (
+    <>
+      <RouteChangeLoader />
+      <Suspense fallback={<AppLoader fullScreen message="Loading page..." />}>
         <Routes>
           <Route
             path="/login"
@@ -173,7 +209,35 @@ export function App() {
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </BrowserRouter>
-    </QueryClientProvider>
+      </Suspense>
+    </>
+  );
+}
+
+function RouteChangeLoader() {
+  const location = useLocation();
+  const mounted = useRef(false);
+  const [isChangingRoute, setIsChangingRoute] = useState(false);
+
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+
+    setIsChangingRoute(true);
+    const timeout = window.setTimeout(() => setIsChangingRoute(false), 350);
+
+    return () => window.clearTimeout(timeout);
+  }, [location.pathname]);
+
+  if (!isChangingRoute) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-white">
+      <AppLoader fullScreen message="Loading page..." />
+    </div>
   );
 }

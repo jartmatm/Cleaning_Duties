@@ -9,6 +9,7 @@ type SessionState = {
   activeSiteId: string | null;
   role: "Owner" | "Manager" | "Cleaner" | null;
   email: string | null;
+  isSessionLoading: boolean;
   setSession: (session: {
     userId: string;
     companyId: string;
@@ -20,6 +21,7 @@ type SessionState = {
   setCompanyBranding: (branding: { companyName: string | null; companyLogoUrl: string | null; companyPalette: string | null }) => void;
   setActiveSiteId: (siteId: string | null) => void;
   setEmail: (email: string | null) => void;
+  setSessionLoading: (isSessionLoading: boolean) => void;
   clearSession: () => void;
 };
 
@@ -32,6 +34,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   activeSiteId: null,
   role: null,
   email: null,
+  isSessionLoading: true,
   setSession: (session) =>
     set({
       userId: session.userId,
@@ -40,10 +43,12 @@ export const useSessionStore = create<SessionState>((set) => ({
       companyLogoUrl: session.companyLogoUrl ?? null,
       companyPalette: session.companyPalette ?? null,
       role: session.role,
+      isSessionLoading: false,
     }),
   setCompanyBranding: (branding) => set({ companyName: branding.companyName, companyLogoUrl: branding.companyLogoUrl, companyPalette: branding.companyPalette }),
   setActiveSiteId: (activeSiteId) => set({ activeSiteId }),
   setEmail: (email) => set({ email }),
+  setSessionLoading: (isSessionLoading) => set({ isSessionLoading }),
   clearSession: () =>
     set({
       userId: null,
@@ -54,5 +59,6 @@ export const useSessionStore = create<SessionState>((set) => ({
       activeSiteId: null,
       role: null,
       email: null,
+      isSessionLoading: false,
     }),
 }));

@@ -12,9 +12,9 @@ export function QuickActions() {
         <p className="mt-1 text-sm text-slate-500">Start the most common manager workflows.</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button>Create Site</Button>
+        <Button onClick={() => navigate("/sites?create=1")}>Create Site</Button>
         <Button variant="secondary" onClick={() => navigate("/duties?create=1")}>Create Duty</Button>
-        <Button variant="ghost">Invite User</Button>
+        <Button variant="ghost" onClick={() => navigate("/users?invite=1")}>Invite User</Button>
       </div>
     </Card>
   );

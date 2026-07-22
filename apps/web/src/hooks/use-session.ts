@@ -9,10 +9,12 @@ export function useSession() {
   const activeSiteId = useSessionStore((state) => state.activeSiteId);
   const role = useSessionStore((state) => state.role);
   const email = useSessionStore((state) => state.email);
+  const isSessionLoading = useSessionStore((state) => state.isSessionLoading);
   const setSession = useSessionStore((state) => state.setSession);
   const setCompanyBranding = useSessionStore((state) => state.setCompanyBranding);
   const setActiveSiteId = useSessionStore((state) => state.setActiveSiteId);
   const setEmail = useSessionStore((state) => state.setEmail);
+  const setSessionLoading = useSessionStore((state) => state.setSessionLoading);
   const clearSession = useSessionStore((state) => state.clearSession);
 
   return {
@@ -24,10 +26,12 @@ export function useSession() {
     activeSiteId,
     role,
     email,
+    isSessionLoading,
     setSession,
     setCompanyBranding,
     setActiveSiteId,
     setEmail,
+    setSessionLoading,
     clearSession,
   };
 }
