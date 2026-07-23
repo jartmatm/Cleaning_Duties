@@ -158,7 +158,7 @@ export function SitesPage() {
             <label className="sr-only" htmlFor="site-search">
               Search sites
             </label>
-            <div className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200">
+            <div className="flex items-center gap-3 rounded-md bg-slate-50 px-4 py-3 ring-1 ring-slate-200">
               <Search className="h-4 w-4 text-slate-400" />
               <Input
                 id="site-search"
@@ -208,7 +208,7 @@ export function SitesPage() {
               <textarea
                 {...form.register("notes")}
                 rows={4}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400"
+                className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400"
                 placeholder="Access notes, lock-up instructions, resident expectations..."
               />
             </div>
@@ -326,15 +326,15 @@ export function SitesPage() {
       <Card className="space-y-4 p-5">
         <SectionTitle title="Site overview" description="Quick rollup of manager attention." />
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl bg-slate-50 p-4">
+          <div className="rounded-md bg-slate-50 p-4">
             <p className="text-sm text-slate-500">Most active</p>
             <p className="mt-2 font-semibold text-slate-950">{topSite?.name ?? "No sites yet"}</p>
           </div>
-          <div className="rounded-2xl bg-slate-50 p-4">
+          <div className="rounded-md bg-slate-50 p-4">
             <p className="text-sm text-slate-500">At risk</p>
             <p className="mt-2 font-semibold text-slate-950">{atRiskSite?.name ?? "No sites yet"}</p>
           </div>
-          <div className="rounded-2xl bg-slate-50 p-4">
+          <div className="rounded-md bg-slate-50 p-4">
             <p className="text-sm text-slate-500">New this month</p>
             <p className="mt-2 font-semibold text-slate-950">{sites.length} site{sites.length === 1 ? "" : "s"}</p>
           </div>

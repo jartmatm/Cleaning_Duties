@@ -19,6 +19,7 @@ import { useSession } from "../../hooks/use-session";
 import { dutyFormSchema, type DutyFormInput, DUTY_PRIORITIES, DUTY_STATUSES } from "@cleaning-duties/shared";
 import { notify } from "../../components/common/toast";
 import { uploadDutyReferencePhoto } from "../../services/duty-photo-service";
+import { listPreloadedDuties, type PreloadedDutyItem } from "../../services/preloaded-duties-service";
 
 type ReferencePhotoItem = {
   id: string;
@@ -60,6 +61,7 @@ export function DutiesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [referencePhotoItems, setReferencePhotoItems] = useState<ReferencePhotoItem[]>([]);
+  const [hasSelectedPreloadedDuty, setHasSelectedPreloadedDuty] = useState(false);
   const [cleanerDutyFilter, setCleanerDutyFilter] = useState<CleanerDutyFilter>("Pending");
   const [managerPriorityFilter, setManagerPriorityFilter] = useState<ManagerPriorityFilter>("All");
   const [managerStatusFilter, setManagerStatusFilter] = useState<ManagerStatusFilter>("All");
@@ -92,6 +94,12 @@ export function DutiesPage() {
     enabled: role === "Cleaner" ? Boolean(userId) : Boolean(activeSiteId),
   });
 
+  const { data: preloadedDuties = [] } = useQuery({
+    queryKey: ["preloaded-duties", companyId],
+    queryFn: () => listPreloadedDuties(companyId ?? ""),
+    enabled: Boolean(companyId) && role !== "Cleaner",
+  });
+
   const form = useForm<DutyFormInput>({
     resolver: zodResolver(dutyFormSchema),
     defaultValues: {
@@ -105,6 +113,7 @@ export function DutiesPage() {
       assignedUserIds: [],
     },
   });
+  const watchedTitle = form.watch("title");
 
   useEffect(() => {
     form.setValue(
@@ -127,6 +136,7 @@ export function DutiesPage() {
       await queryClient.invalidateQueries({ queryKey: ["cleaner-assigned-duties"] });
       await queryClient.refetchQueries({ queryKey: ["duties", activeSiteId, search] });
       setShowCreate(false);
+      setHasSelectedPreloadedDuty(false);
       setReferencePhotoItems([]);
       form.reset();
       notify({ tone: "success", title: "Duty created", message: "The duty was saved successfully." });
@@ -143,6 +153,7 @@ export function DutiesPage() {
       await queryClient.invalidateQueries({ queryKey: ["cleaner-assigned-duties"] });
       await queryClient.refetchQueries({ queryKey: ["duties", activeSiteId, search] });
       setEditingDuty(null);
+      setHasSelectedPreloadedDuty(false);
       setReferencePhotoItems([]);
       form.reset();
       notify({ tone: "success", title: "Duty updated", message: "The duty changes were saved successfully." });
@@ -212,6 +223,20 @@ export function DutiesPage() {
     () => new Map(assignees.map((assignee) => [assignee.id, assignee])),
     [assignees],
   );
+  const matchingPreloadedDuties = useMemo(() => {
+    const query = watchedTitle.trim().toLowerCase();
+
+    if (role === "Cleaner" || editingDuty || hasSelectedPreloadedDuty || query.length < 2) {
+      return [];
+    }
+
+    return preloadedDuties
+      .filter((template) => {
+        const title = template.title.toLowerCase();
+        return title.includes(query) || query.split(/\s+/).some((part) => part.length > 2 && title.includes(part));
+      })
+      .slice(0, 5);
+  }, [editingDuty, hasSelectedPreloadedDuty, preloadedDuties, role, watchedTitle]);
 
   useEffect(() => {
     if (sessionActiveSiteId) {
@@ -223,6 +248,7 @@ export function DutiesPage() {
     setEditingDuty(null);
     setShowCreate(true);
     setShowPhotoModal(false);
+    setHasSelectedPreloadedDuty(false);
     setReferencePhotoItems([]);
     form.reset({
       title: "",
@@ -251,6 +277,7 @@ export function DutiesPage() {
   function startEdit(duty: DutyItem) {
     setShowCreate(false);
     setShowPhotoModal(false);
+    setHasSelectedPreloadedDuty(false);
     setEditingDuty(duty);
     setReferencePhotoItems(
       duty.referencePhotos.map((url) => ({
@@ -270,6 +297,29 @@ export function DutiesPage() {
       equipment: duty.equipment.join(", "),
       referencePhotos: duty.referencePhotos.join(", "),
       assignedUserIds: duty.assignedUserIds,
+    });
+  }
+
+  function applyPreloadedDuty(template: PreloadedDutyItem) {
+    const photoItems = template.referencePhotos.map((url) => ({
+      id: crypto.randomUUID(),
+      previewUrl: url,
+      remoteUrl: url,
+      status: "done" as const,
+      fileName: url,
+    }));
+
+    setHasSelectedPreloadedDuty(true);
+    setReferencePhotoItems(photoItems);
+    form.reset({
+      title: template.title,
+      description: template.description,
+      priority: template.priority,
+      status: template.status,
+      dueDate: "",
+      equipment: template.equipment.join(", "),
+      referencePhotos: template.referencePhotos.join(", "),
+      assignedUserIds: form.getValues("assignedUserIds") ?? [],
     });
   }
 
@@ -418,7 +468,7 @@ export function DutiesPage() {
                 setSelectedSiteId(nextSiteId);
                 setSessionActiveSiteId(nextSiteId);
               }}
-              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
+              className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
             >
               <option value="">Select a site</option>
               {sites.map((site: SiteItem) => (
@@ -430,7 +480,7 @@ export function DutiesPage() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Search</label>
-            <div className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200">
+            <div className="flex items-center gap-3 rounded-md bg-slate-50 px-4 py-3 ring-1 ring-slate-200">
               <Search className="h-4 w-4 text-slate-400" />
               <input
                 value={search}
@@ -533,6 +583,7 @@ export function DutiesPage() {
                 setShowCreate(false);
                 setEditingDuty(null);
                 setShowPhotoModal(false);
+                setHasSelectedPreloadedDuty(false);
                 setReferencePhotoItems([]);
                 form.reset();
               }}
@@ -544,20 +595,47 @@ export function DutiesPage() {
           <form className="grid gap-4 lg:grid-cols-2" onSubmit={form.handleSubmit(onSubmit)}>
             <div className="space-y-2 lg:col-span-2">
               <label className="text-sm font-medium">Title</label>
-              <Input {...form.register("title")} placeholder="Lobby deep clean" />
+              <div className="relative">
+                <Input
+                  {...form.register("title", {
+                    onChange: () => setHasSelectedPreloadedDuty(false),
+                  })}
+                  placeholder="Lobby deep clean"
+                />
+                {matchingPreloadedDuties.length > 0 ? (
+                  <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                    {matchingPreloadedDuties.map((template) => (
+                      <button
+                        key={template.id}
+                        type="button"
+                        className="flex w-full items-start justify-between gap-4 border-b border-slate-100 px-4 py-3 text-left transition last:border-b-0 hover:bg-slate-50"
+                        onClick={() => applyPreloadedDuty(template)}
+                      >
+                        <span>
+                          <span className="block text-sm font-semibold text-slate-950">{template.title}</span>
+                          <span className="mt-1 line-clamp-1 block text-xs text-slate-500">{template.description || "No description"}</span>
+                        </span>
+                        <span className="shrink-0 rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">
+                          {template.referencePhotos.length} photos
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
             <div className="space-y-2 lg:col-span-2">
               <label className="text-sm font-medium">Description</label>
               <textarea
                 {...form.register("description")}
                 rows={4}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
+                className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
                 placeholder="Write the duty scope and any special instructions."
               />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Priority</label>
-              <select {...form.register("priority")} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
+              <select {...form.register("priority")} className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm">
                 {DUTY_PRIORITIES.map((priority) => (
                   <option key={priority} value={priority}>
                     {priority}
@@ -567,7 +645,7 @@ export function DutiesPage() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Status</label>
-              <select {...form.register("status")} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
+              <select {...form.register("status")} className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm">
                 {DUTY_STATUSES.map((status) => (
                   <option key={status} value={status}>
                     {status}
@@ -613,12 +691,12 @@ export function DutiesPage() {
               />
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {referencePhotoItems.length === 0 ? (
-                  <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 sm:col-span-2 xl:col-span-3">
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 sm:col-span-2 xl:col-span-3">
                     No reference photos uploaded yet.
                   </div>
                 ) : (
                   referencePhotoItems.map((photo) => (
-                    <div key={photo.id} className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
+                    <div key={photo.id} className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                       <img src={photo.previewUrl} alt={photo.fileName} className="h-40 w-full object-cover" />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
                       <div className="absolute left-3 top-3">
@@ -655,7 +733,7 @@ export function DutiesPage() {
               <label className="text-sm font-medium">Assign cleaners</label>
               <div className="grid gap-3 md:grid-cols-2">
                 {assignees.map((assignee: AssigneeOption) => (
-                  <label key={assignee.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <label key={assignee.id} className="flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
                     <input type="checkbox" value={assignee.id} {...form.register("assignedUserIds")} />
                     <div>
                       <p className="text-sm font-medium text-slate-950">{assignee.name}</p>
@@ -693,6 +771,7 @@ export function DutiesPage() {
                   setShowPhotoModal(false);
                   setReferencePhotoItems([]);
                   form.reset();
+                  setHasSelectedPreloadedDuty(false);
                 }}
               >
                 Cancel
@@ -722,7 +801,7 @@ export function DutiesPage() {
               </button>
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
               <p className="text-sm text-slate-700">Native capture is enabled on supported mobile browsers.</p>
               <p className="mt-1 text-xs text-slate-500">You can upload unlimited images. Each one will show a preview and upload status below.</p>
             </div>
@@ -862,7 +941,7 @@ export function DutiesPage() {
         <SectionTitle title="Status distribution" description={`The current mix of work across the active site. ${dutyCount} duties loaded.`} />
         <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
           {DUTY_STATUSES.map((status) => (
-            <div key={status} className="rounded-2xl bg-slate-50 p-4">
+            <div key={status} className="rounded-md bg-slate-50 p-4">
               <DutyStatusBadge status={status} />
               <p className="mt-2 text-2xl font-semibold text-slate-950">{duties.filter((duty) => duty.status === status).length}</p>
             </div>

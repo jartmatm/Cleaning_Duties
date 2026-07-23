@@ -100,7 +100,7 @@ export function LoginPage() {
   return (
     <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-6xl items-center justify-center">
       <Card className="grid w-full gap-8 lg:grid-cols-2 lg:p-8">
-        <div className="space-y-6 rounded-[2rem] bg-slate-50 p-8 text-slate-900 ring-1 ring-slate-200">
+        <div className="space-y-6 rounded-lg bg-slate-50 p-8 text-slate-900 ring-1 ring-slate-200">
           <div className="flex justify-center">
             <DataCleanLottiePreview />
           </div>
@@ -135,7 +135,7 @@ export function LoginPage() {
               Forgot your password?
             </button>
           </div>
-          {errorMessage ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</p> : null}
+          {errorMessage ? <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</p> : null}
           <Button className="w-full !bg-slate-950 !text-white shadow-lg shadow-slate-950/20 hover:!bg-slate-800" disabled={isSubmitting}>
             {isSubmitting ? (
               <>

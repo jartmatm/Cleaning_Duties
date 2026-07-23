@@ -58,7 +58,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-[var(--company-surface)] text-[var(--company-text)]" style={themeStyle}>
       <div className="mx-auto flex min-h-screen max-w-7xl gap-6 px-4 py-4 pb-24 lg:px-6 lg:py-6 lg:pb-6">
-        <aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-72 flex-col justify-between rounded-[2rem] bg-white p-6 shadow-sm ring-1 ring-[var(--company-border)] lg:flex">
+        <aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-72 flex-col justify-between rounded-lg bg-white p-6 shadow-sm ring-1 ring-[var(--company-border)] lg:flex">
           <div className="space-y-8">
             <AppLogo title={companyName ?? "Cleaning Duties"} subtitle={activeSite?.name ?? "No site selected"} logoUrl={companyLogoUrl} />
             <nav className="space-y-2 text-sm">
@@ -70,7 +70,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                     to={item.to}
                     end={item.to === "/"}
                     className={({ isActive }) =>
-                      `flex items-center gap-3 rounded-2xl px-4 py-3 transition ${
+                      `flex items-center gap-3 rounded-md px-4 py-3 transition ${
                         isActive ? "bg-[var(--company-primary)] text-white" : "text-slate-600 hover:bg-[var(--company-surface)]"
                       }`
                     }
@@ -83,7 +83,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </nav>
           </div>
           <div className="space-y-3">
-            <div className="rounded-2xl bg-[var(--company-surface)] p-4 text-xs text-slate-500">
+            <div className="rounded-md bg-[var(--company-surface)] p-4 text-xs text-slate-500">
               <p className="font-medium text-[var(--company-text)]">{email ?? "Not signed in"}</p>
               <p className="mt-1">{role ?? "Cleaner"}</p>
             </div>
@@ -99,7 +99,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </aside>
 
-        <main className="flex-1 space-y-6 rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-[var(--company-border)] lg:p-8">
+        <main className="flex-1 space-y-6 rounded-lg bg-white p-5 shadow-sm ring-1 ring-[var(--company-border)] lg:p-8">
           <div className="flex items-center justify-between gap-4 lg:hidden">
             <AppLogo title={companyName ?? "Cleaning Duties"} subtitle={activeSite?.name ?? "No site selected"} logoUrl={companyLogoUrl} />
             <Button
@@ -120,7 +120,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               sites={sites}
               onSelectSite={setActiveSiteId}
             />
-            <div className="rounded-[2rem] p-5 text-white" style={{ backgroundColor: palette.primary }}>
+            <div className="rounded-lg p-5 text-white" style={{ backgroundColor: palette.primary }}>
               <p className="text-xs uppercase tracking-[0.35em] text-white/60">Current context</p>
               <p className="mt-3 text-2xl font-semibold tracking-tight">{activeSite?.name ?? "No active site"}</p>
               <p className="mt-2 text-sm text-white/75">

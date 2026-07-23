@@ -12,7 +12,7 @@ export function MobileNav() {
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-medium ${
+                `flex flex-col items-center gap-1 rounded-md px-2 py-2 text-[11px] font-medium ${
                   isActive ? "bg-[var(--company-primary)] text-white" : "text-slate-500"
                 }`
               }

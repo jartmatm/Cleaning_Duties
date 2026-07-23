@@ -218,7 +218,7 @@ export function UsersPage() {
                   <input
                     type="text"
                     {...form.register("fullName")}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400"
+                    className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400"
                     placeholder="Full name"
                   />
                   {form.formState.errors.fullName ? <p className="text-sm text-rose-600">{form.formState.errors.fullName.message}</p> : null}
@@ -229,7 +229,7 @@ export function UsersPage() {
                   <input
                     type="email"
                     {...form.register("email")}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400"
+                    className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400"
                     placeholder="cleaner@company.com"
                   />
                   {form.formState.errors.email ? <p className="text-sm text-rose-600">{form.formState.errors.email.message}</p> : null}
@@ -240,7 +240,7 @@ export function UsersPage() {
                   <input
                     type="password"
                     {...form.register("password")}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400"
+                    className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400"
                     placeholder="Create a secure password"
                   />
                   {form.formState.errors.password ? <p className="text-sm text-rose-600">{form.formState.errors.password.message}</p> : null}
@@ -256,7 +256,7 @@ export function UsersPage() {
                   {sites.map((site: SiteItem) => (
                     <label
                       key={site.id}
-                      className="flex cursor-pointer items-start gap-3 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:bg-slate-100"
+                      className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 transition hover:bg-slate-100"
                     >
                       <input
                         type="checkbox"
@@ -305,20 +305,20 @@ export function UsersPage() {
         <SectionTitle title="Cleaners" description="Active cleaners and the sites they can access." />
         <div className="grid gap-4 md:grid-cols-2">
           {isLoadingUsers ? (
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 md:col-span-2">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 md:col-span-2">
               Loading team members...
             </div>
           ) : usersError ? (
-            <div className="rounded-3xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700 md:col-span-2">
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700 md:col-span-2">
               {usersError instanceof Error ? usersError.message : "Could not load team members."}
             </div>
           ) : users.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 md:col-span-2">
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 md:col-span-2">
               No team members found for this company.
             </div>
           ) : (
             users.map((user) => (
-              <div key={user.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+              <div key={user.id} className="rounded-lg border border-slate-200 bg-slate-50 p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="font-semibold text-slate-950">{user.name}</p>

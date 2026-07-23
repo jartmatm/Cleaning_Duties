@@ -133,7 +133,7 @@ function ManagerDashboard() {
               <p className="text-sm text-slate-500">No duties for this site yet.</p>
             ) : (
               duties.slice(0, 3).map((item) => (
-                <div key={item.id} className="flex flex-col gap-2 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between">
+                <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="font-medium text-slate-950">{item.title}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
@@ -159,7 +159,7 @@ function ManagerDashboard() {
                 <p className="text-sm text-slate-500">No notifications yet.</p>
               ) : (
                 notifications.map((notification) => (
-                  <div key={notification.id} className="rounded-2xl bg-slate-50 p-4">
+                  <div key={notification.id} className="rounded-md bg-slate-50 p-4">
                     <p className="text-sm font-medium text-slate-950">{notification.type}</p>
                     <p className="mt-1 text-sm text-slate-500">{new Date(notification.createdAt).toLocaleString()}</p>
                   </div>
@@ -417,11 +417,11 @@ function DonutChartFillable({ completed, remaining }: { completed: number; remai
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-2xl bg-emerald-50 px-3 py-2 text-emerald-800">
+        <div className="rounded-md bg-emerald-50 px-3 py-2 text-emerald-800">
           <p className="text-xs font-semibold uppercase">Completed</p>
           <p className="mt-1 text-lg font-bold">{completed}</p>
         </div>
-        <div className="rounded-2xl bg-slate-50 px-3 py-2 text-slate-700">
+        <div className="rounded-md bg-slate-50 px-3 py-2 text-slate-700">
           <p className="text-xs font-semibold uppercase">Remaining</p>
           <p className="mt-1 text-lg font-bold">{remaining}</p>
         </div>
@@ -442,7 +442,7 @@ function KpiButton(props: {
     <button
       type="button"
       onClick={props.onClick}
-      className={`rounded-[1.5rem] border p-5 text-left transition ${
+      className={`rounded-lg border p-5 text-left transition ${
         props.active ? "border-slate-900 bg-white shadow-sm" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
       }`}
     >
@@ -452,7 +452,7 @@ function KpiButton(props: {
           <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{props.value}</p>
           <p className="mt-2 text-sm text-slate-500">{props.detail}</p>
         </div>
-        <div className={`rounded-2xl p-3 ${props.active ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-700"}`}>{props.icon}</div>
+        <div className={`rounded-md p-3 ${props.active ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-700"}`}>{props.icon}</div>
       </div>
     </button>
   );
@@ -476,7 +476,7 @@ function DutyList(props: {
   return (
     <div className="space-y-3">
       {props.duties.map((duty) => (
-        <div key={duty.id} className="flex flex-col gap-3 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between">
+        <div key={duty.id} className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="font-medium text-slate-950">{duty.title}</p>
             <p className="mt-1 text-sm text-slate-500">
@@ -501,7 +501,7 @@ function IncidentList(props: { incidents: Awaited<ReturnType<typeof listIncident
   return (
     <div className="space-y-3">
       {props.incidents.map((incident) => (
-        <div key={incident.id} className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+        <div key={incident.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="font-medium text-slate-950">{incident.incidentType}</p>
             <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
@@ -511,7 +511,7 @@ function IncidentList(props: { incidents: Awaited<ReturnType<typeof listIncident
           <p className="mt-1 text-sm text-slate-500">
             {props.sites.get(incident.siteId)?.name ?? "Site"} · {new Date(incident.createdAt).toLocaleString()}
           </p>
-          <pre className="mt-3 whitespace-pre-wrap rounded-2xl bg-white p-3 text-sm text-slate-600 ring-1 ring-slate-200">{incident.details}</pre>
+          <pre className="mt-3 whitespace-pre-wrap rounded-md bg-white p-3 text-sm text-slate-600 ring-1 ring-slate-200">{incident.details}</pre>
         </div>
       ))}
     </div>
@@ -569,7 +569,7 @@ function IncidentReportModal(props: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-      <Card className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-[2rem] p-6">
+      <Card className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-lg p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xl font-semibold text-slate-950">Incident report</p>
@@ -618,7 +618,7 @@ function SelectField(props: {
   return (
     <label className="block space-y-2">
       <span className="text-sm font-medium text-slate-700">{props.label}</span>
-      <select value={props.value} onChange={(event) => props.onChange(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-400">
+      <select value={props.value} onChange={(event) => props.onChange(event.target.value)} className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-400">
         {props.options.map((option) => (
           <option key={`${props.label}-${option.value}`} value={option.value}>{option.label}</option>
         ))}
@@ -637,7 +637,7 @@ function TextField(props: {
   return (
     <label className="block space-y-2">
       <span className="text-sm font-medium text-slate-700">{props.label}</span>
-      <input type={props.type ?? "text"} value={props.value} onChange={(event) => props.onChange(event.target.value)} placeholder={props.placeholder} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400" />
+      <input type={props.type ?? "text"} value={props.value} onChange={(event) => props.onChange(event.target.value)} placeholder={props.placeholder} className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400" />
     </label>
   );
 }
@@ -650,7 +650,7 @@ function TextAreaField(props: {
   return (
     <label className="block space-y-2">
       <span className="text-sm font-medium text-slate-700">{props.label}</span>
-      <textarea value={props.value} onChange={(event) => props.onChange(event.target.value)} rows={3} className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-400" />
+      <textarea value={props.value} onChange={(event) => props.onChange(event.target.value)} rows={3} className="w-full resize-none rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-400" />
     </label>
   );
 }

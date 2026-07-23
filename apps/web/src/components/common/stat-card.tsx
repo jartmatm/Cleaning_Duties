@@ -16,7 +16,7 @@ export function StatCard({ label, value, detail, accent }: StatCardProps) {
         <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{value}</p>
         <p className="mt-2 text-sm text-slate-500">{detail}</p>
       </div>
-      {accent ? <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">{accent}</div> : null}
+      {accent ? <div className="rounded-md bg-slate-50 p-3 text-slate-700">{accent}</div> : null}
     </Card>
   );
 }

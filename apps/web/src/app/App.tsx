@@ -17,6 +17,7 @@ import { getCompanySettings } from "../services/company-service";
 import { supabase } from "../services/supabase-client";
 import { ToastViewport } from "../components/common/toast";
 import { SettingsPage } from "../pages/settings/SettingsPage";
+import { PreloadedDutiesPage } from "../pages/settings/PreloadedDutiesPage";
 import { AppLoader } from "../components/common/app-loader";
 
 const queryClient = new QueryClient();
@@ -79,7 +80,6 @@ export function App() {
       }
 
       void (async () => {
-        setSessionLoading(true);
         const profile = await getCurrentProfile(session.user.id);
         const company = await getCompanySettings(profile.company_id);
         if (!mounted) {
@@ -99,7 +99,7 @@ export function App() {
     });
 
     function handleAppResume() {
-      void syncSession(true).catch(() => {
+      void syncSession(false).catch(() => {
         if (mounted) {
           clearSession();
         }
@@ -203,6 +203,16 @@ function AppRoutes() {
               <ProtectedRoute>
                 <AppLayout>
                   <SettingsPage />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/preloaded-duties"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <PreloadedDutiesPage />
                 </AppLayout>
               </ProtectedRoute>
             }

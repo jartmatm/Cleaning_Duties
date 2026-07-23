@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { Check, ImageUp, Loader2, RotateCcw, Save } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
@@ -15,6 +16,7 @@ import { getCurrentProfile, updateProfileName } from "../../services/profile-ser
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { userId, companyId, role, setCompanyBranding } = useSession();
   const [companyName, setCompanyName] = useState("");
@@ -26,6 +28,7 @@ export function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const isCleaner = role === "Cleaner";
+  const canManagePreloadedDuties = role === "Owner" || role === "Manager";
 
   const { data: company, isLoading: isLoadingCompany } = useQuery({
     queryKey: ["company-settings", companyId],
@@ -195,7 +198,7 @@ export function SettingsPage() {
           />
 
           {isLoading ? (
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">Loading settings...</div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">Loading settings...</div>
           ) : (
             <form
               className="space-y-5"
@@ -206,7 +209,7 @@ export function SettingsPage() {
             >
               {!isCleaner ? (
                 <div className="grid gap-4 md:grid-cols-[auto_1fr] md:items-center">
-                  <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-50">
+                  <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                     {displayedLogoUrl ? (
                       <img src={displayedLogoUrl} alt={`${companyName} logo`} className="h-full w-full object-cover" />
                     ) : (
@@ -248,7 +251,7 @@ export function SettingsPage() {
                           key={palette.id}
                           type="button"
                           onClick={() => setSelectedPalette(palette.id)}
-                          className={`rounded-3xl border p-4 text-left transition ${
+                          className={`rounded-lg border p-4 text-left transition ${
                             isSelected ? "border-slate-900 bg-white shadow-sm" : "border-slate-200 bg-slate-50 hover:bg-white"
                           }`}
                         >
@@ -258,7 +261,7 @@ export function SettingsPage() {
                           </div>
                           <div className="mt-4 flex gap-2">
                             {[palette.primary, palette.accent, palette.surface, palette.text].map((color) => (
-                              <span key={color} className="h-8 flex-1 rounded-2xl ring-1 ring-black/5" style={{ backgroundColor: color }} />
+                              <span key={color} className="h-8 flex-1 rounded-md ring-1 ring-black/5" style={{ backgroundColor: color }} />
                             ))}
                           </div>
                         </button>
@@ -285,9 +288,9 @@ export function SettingsPage() {
         {!isCleaner ? (
           <Card className="space-y-5 p-5" style={{ backgroundColor: activePalette.surface }}>
             <SectionTitle title="Brand preview" description="A quick look at the selected identity." />
-            <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-black/5">
+            <div className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-black/5">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl" style={{ backgroundColor: activePalette.primary }}>
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md" style={{ backgroundColor: activePalette.primary }}>
                   {displayedLogoUrl ? (
                     <img src={displayedLogoUrl} alt="" className="h-full w-full object-cover" />
                   ) : (
@@ -301,16 +304,33 @@ export function SettingsPage() {
                   <p className="text-xs text-slate-500">{managerName || "Manager"}</p>
                 </div>
               </div>
-              <div className="mt-5 rounded-2xl px-4 py-3 text-sm font-medium text-white" style={{ backgroundColor: activePalette.primary }}>
+              <div className="mt-5 rounded-md px-4 py-3 text-sm font-medium text-white" style={{ backgroundColor: activePalette.primary }}>
                 Active palette: {activePalette.name}
               </div>
-              <div className="mt-3 rounded-2xl px-4 py-3 text-sm font-medium" style={{ backgroundColor: activePalette.accent, color: activePalette.text }}>
+              <div className="mt-3 rounded-md px-4 py-3 text-sm font-medium" style={{ backgroundColor: activePalette.accent, color: activePalette.text }}>
                 Site operations
               </div>
             </div>
           </Card>
         ) : null}
       </div>
+
+      {canManagePreloadedDuties ? (
+        <Card className="space-y-5 p-5">
+          <SectionTitle
+            title="Preloaded Duties"
+            description="Manage reusable duties that can be selected while creating new work."
+          />
+          <div className="flex flex-wrap gap-3">
+            <Button type="button" variant="secondary" onClick={() => navigate("/settings/preloaded-duties")}>
+              View Duties
+            </Button>
+            <Button type="button" onClick={() => navigate("/settings/preloaded-duties?create=1")}>
+              Create New
+            </Button>
+          </div>
+        </Card>
+      ) : null}
 
       <Card className="space-y-5 p-5">
         <SectionTitle title="Password" description="Update the password for the current signed-in user." />

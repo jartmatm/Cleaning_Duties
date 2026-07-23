@@ -54,11 +54,11 @@ export function ToastViewport() {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className="rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60 ring-1 ring-black/5"
+          className="rounded-lg border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60 ring-1 ring-black/5"
         >
           <div className="flex items-start gap-3">
             <div
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl ${
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${
                 toast.tone === "success"
                   ? "bg-emerald-50 text-emerald-600"
                   : toast.tone === "error"

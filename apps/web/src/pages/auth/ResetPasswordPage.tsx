@@ -98,7 +98,7 @@ export function ResetPasswordPage() {
 
         {sessionError ? (
           <div className="space-y-4">
-            <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{sessionError}</p>
+            <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{sessionError}</p>
             <Button type="button" className="w-full" onClick={() => navigate("/login", { replace: true })}>
               Back to login
             </Button>
