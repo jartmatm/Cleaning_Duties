@@ -104,3 +104,11 @@ export async function createServiceReport(input: {
 
   return mapReport(data as ServiceReportRow);
 }
+
+export async function deleteServiceReport(reportId: string) {
+  const { error } = await supabase.from("service_reports").delete().eq("id", reportId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}

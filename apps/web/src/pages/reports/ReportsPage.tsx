@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
+import { ConfirmationDialog } from "../../components/common/confirmation-dialog";
 import { PageHeader } from "../../components/common/page-header";
 import { SectionTitle } from "../../components/common/section-title";
 import { notify } from "../../components/common/toast";
@@ -10,7 +11,7 @@ import { useSession } from "../../hooks/use-session";
 import { getCompanySettings } from "../../services/company-service";
 import { listDuties, type DutyItem } from "../../services/duties-service";
 import { getCurrentProfile } from "../../services/profile-service";
-import { createServiceReport, listServiceReports, type ServiceReportItem, type ServiceReportSnapshot } from "../../services/reports-service";
+import { createServiceReport, deleteServiceReport, listServiceReports, type ServiceReportItem, type ServiceReportSnapshot } from "../../services/reports-service";
 import { listSites } from "../../services/sites-service";
 
 type DateRange = {
@@ -57,6 +58,7 @@ export function ReportsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isMediaOpen, setIsMediaOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState<ServiceReportItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ServiceReportItem | null>(null);
   const [range, setRange] = useState<DateRange>({ dateFrom: todayValue(), dateTo: todayValue() });
   const [mediaRange, setMediaRange] = useState<DateRange>({ dateFrom: todayValue(), dateTo: todayValue() });
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
@@ -138,6 +140,17 @@ export function ReportsPage() {
     onError: (error) => notify({ tone: "error", title: "Could not create report", message: error instanceof Error ? error.message : "Unknown error" }),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: deleteServiceReport,
+    onSuccess: async (_data, reportId) => {
+      await queryClient.invalidateQueries({ queryKey: ["service-reports", companyId] });
+      setDeleteTarget(null);
+      setSelectedReport((current) => current?.id === reportId ? null : current);
+      notify({ tone: "success", title: "Report deleted", message: "The report was removed successfully." });
+    },
+    onError: (error) => notify({ tone: "error", title: "Could not delete report", message: error instanceof Error ? error.message : "Unknown error" }),
+  });
+
   function openMediaDialog() {
     setSelectedMediaIds(mediaItems.map((item) => item.id));
     setIsMediaOpen(true);
@@ -156,6 +169,23 @@ export function ReportsPage() {
         link.remove();
       }, index * 150);
     });
+  }
+
+  function downloadReportPdf(report: ServiceReportItem) {
+    const printWindow = window.open("", "_blank", "noopener,noreferrer");
+
+    if (!printWindow) {
+      notify({ tone: "error", title: "Could not open PDF", message: "Allow pop-ups and try again." });
+      return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(buildReportPrintHtml(report));
+    printWindow.document.close();
+    printWindow.focus();
+    window.setTimeout(() => {
+      printWindow.print();
+    }, 500);
   }
 
   return (
@@ -186,17 +216,41 @@ export function ReportsPage() {
           ) : (
             <div className="space-y-3">
               {reports.map((report) => (
-                <button
+                <div
                   key={report.id}
-                  type="button"
-                  onClick={() => setSelectedReport(report)}
-                  className="w-full rounded-md border border-slate-200 bg-slate-50 p-4 text-left transition hover:bg-white"
+                  className="flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-4 transition hover:bg-white"
                 >
-                  <p className="font-semibold text-slate-950">{report.title}</p>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {report.dateFrom} to {report.dateTo} · {new Date(report.createdAt).toLocaleString()}
-                  </p>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedReport(report)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <p className="font-semibold text-slate-950">{report.title}</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {report.dateFrom} to {report.dateTo} · {new Date(report.createdAt).toLocaleString()}
+                    </p>
+                  </button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => downloadReportPdf(report)}
+                      className="rounded-md p-2 text-slate-500 transition hover:bg-white hover:text-slate-950"
+                      aria-label={`Download ${report.title} as PDF`}
+                      title="Download PDF"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget(report)}
+                      className="rounded-md p-2 text-slate-500 transition hover:bg-red-50 hover:text-red-600"
+                      aria-label={`Delete ${report.title}`}
+                      title="Delete report"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -232,8 +286,133 @@ export function ReportsPage() {
           onDownload={downloadSelectedMedia}
         />
       ) : null}
+
+      {deleteTarget ? (
+        <ConfirmationDialog
+          title={`Delete ${deleteTarget.title}?`}
+          description="This report will be permanently removed from the saved reports list."
+          confirmLabel={deleteMutation.isPending ? "Deleting..." : "Delete report"}
+          destructive
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={async () => {
+            await deleteMutation.mutateAsync(deleteTarget.id);
+          }}
+        />
+      ) : null}
     </div>
   );
+}
+
+function escapeHtml(value: string | null | undefined) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    };
+    return entities[character] ?? character;
+  });
+}
+
+function buildReportPrintHtml(report: ServiceReportItem) {
+  const snapshot = report.snapshot;
+  const score = snapshot.totalCount > 0 ? Math.round((snapshot.completedCount / snapshot.totalCount) * 100) : 0;
+  const reportDate = snapshot.dateFrom === snapshot.dateTo ? snapshot.dateFrom : `${snapshot.dateFrom} / ${snapshot.dateTo}`;
+  const dutiesHtml = snapshot.duties.length === 0
+    ? `<p class="muted">No duties found for this date range.</p>`
+    : snapshot.duties.map((duty) => {
+      const photoColumn = (title: string, photos: string[]) => `
+        <div>
+          <p class="photo-title">${title}</p>
+          ${photos.length === 0
+            ? `<div class="empty-photo">${title}: no photos uploaded.</div>`
+            : `<div class="photos">${photos.map((photo) => `<img src="${escapeHtml(photo)}" alt="" />`).join("")}</div>`}
+        </div>
+      `;
+
+      return `
+        <section class="duty">
+          <div class="duty-head">
+            <h3>${escapeHtml(duty.title)}</h3>
+            <p>${escapeHtml(duty.status)}</p>
+          </div>
+          ${duty.description ? `<p class="description">${escapeHtml(duty.description)}</p>` : ""}
+          ${duty.beforePhotos.length || duty.afterPhotos.length ? `
+            <div class="photo-grid">
+              ${photoColumn("Before", duty.beforePhotos)}
+              ${photoColumn("After", duty.afterPhotos)}
+            </div>
+          ` : ""}
+        </section>
+      `;
+    }).join("");
+
+  return `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(report.title)}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body { margin: 0; background: #f1f5f9; color: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+          .page { width: min(100%, 920px); margin: 0 auto; background: #fff; padding: 48px; min-height: 100vh; }
+          .top { display: flex; justify-content: space-between; gap: 24px; color: #475569; font-size: 13px; font-weight: 700; }
+          .brand { margin-top: 56px; }
+          .logo { max-height: 96px; max-width: 320px; object-fit: contain; }
+          h1 { margin: 32px 0 0; max-width: 720px; font-size: 42px; line-height: 1.12; letter-spacing: 0; }
+          .meta { margin-top: 28px; display: flex; justify-content: space-between; gap: 24px; color: #475569; font-size: 22px; }
+          .complete { color: #047857; font-weight: 800; }
+          .rows { margin-top: 40px; border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; }
+          .row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 18px 0; border-bottom: 1px solid #e2e8f0; font-size: 18px; }
+          .row:last-child { border-bottom: 0; }
+          .row strong { font-weight: 800; }
+          .row span { text-align: right; color: #475569; }
+          .section-title { margin-top: 56px; font-size: 28px; }
+          .duty { break-inside: avoid; margin-top: 24px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; }
+          .duty-head { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+          .duty h3 { margin: 0; font-size: 20px; }
+          .duty-head p { margin: 0; color: #64748b; font-weight: 700; }
+          .description { margin: 12px 0 0; color: #475569; }
+          .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 18px; }
+          .photo-title { margin: 0 0 8px; color: #475569; font-size: 13px; font-weight: 800; }
+          .photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+          .photos img { width: 100%; height: 110px; border-radius: 6px; object-fit: cover; }
+          .empty-photo { border-radius: 6px; background: #f8fafc; padding: 12px; color: #64748b; font-size: 13px; }
+          .muted { color: #64748b; }
+          @media print {
+            body { background: #fff; }
+            .page { width: 100%; padding: 28px; }
+          }
+        </style>
+      </head>
+      <body>
+        <main class="page">
+          <div class="top">
+            <p>${escapeHtml(snapshot.companyName)}${snapshot.siteName ? ` - ${escapeHtml(snapshot.siteName)}` : ""}</p>
+            <p>${escapeHtml(new Date(snapshot.generatedAt).toLocaleString())}</p>
+          </div>
+          <section class="brand">
+            ${snapshot.companyLogoUrl ? `<img class="logo" src="${escapeHtml(snapshot.companyLogoUrl)}" alt="${escapeHtml(snapshot.companyName)} logo" />` : `<h2>${escapeHtml(snapshot.companyName)}</h2>`}
+            <h1>${escapeHtml(snapshot.siteName ?? snapshot.companyName)} - Cleaning Service Report</h1>
+            <div class="meta">
+              <p>${escapeHtml(reportDate)} / ${escapeHtml(snapshot.preparedBy)}</p>
+              <p class="complete">Complete</p>
+            </div>
+          </section>
+          <section class="rows">
+            <div class="row"><strong>Score</strong><span>${snapshot.completedCount} / ${snapshot.totalCount} (${score}%)</span></div>
+            <div class="row"><strong>Conducted on</strong><span>${escapeHtml(new Date(snapshot.generatedAt).toLocaleString())}</span></div>
+            <div class="row"><strong>Prepared by</strong><span>${escapeHtml(snapshot.preparedBy)}</span></div>
+          </section>
+          <h2 class="section-title">Services performed</h2>
+          ${dutiesHtml}
+        </main>
+      </body>
+    </html>
+  `;
 }
 
 function DateRangeDialog(props: {
