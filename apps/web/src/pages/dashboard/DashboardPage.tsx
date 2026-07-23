@@ -2,12 +2,12 @@ import { INCIDENT_TYPES, type IncidentType } from "@cleaning-duties/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { arc, pie, type PieArcDatum } from "d3";
 import { Bell, CheckCircle2, CircleAlert, ClipboardList, ListTodo, Loader2, Send, Sparkles, X } from "lucide-react";
-import Lottie from "lottie-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { CleanerDutyDetailModal } from "../../components/common/cleaner-duty-detail-modal";
+import { CompletionCelebration } from "../../components/common/completion-celebration";
 import { DutyStatusBadge } from "../../components/common/duty-status-badge";
 import { PageHeader } from "../../components/common/page-header";
 import { QuickActions } from "../../components/common/quick-actions";
@@ -20,7 +20,6 @@ import { createIncident, listIncidentsForReporter, listIncidentsForSite } from "
 import { listNotifications } from "../../services/notifications-service";
 import { getCurrentProfile } from "../../services/profile-service";
 import { listMySites, listSites, type SiteItem } from "../../services/sites-service";
-import successCompleteLottie from "../../assets/success-complete-lottie.json";
 
 type CleanerFilter = "pending" | "in-progress" | "completed" | "incidents";
 type ManagerDashboardFilter = "pending" | "completed" | "overdue" | "incidents";
@@ -358,10 +357,8 @@ function CleanerDashboard() {
     });
   }
 
-  function handleDutyCompleted(completedDuty: DutyItem) {
-    const remainingActiveDuties = siteDuties.filter((duty) => duty.id !== completedDuty.id && isCleanerActiveDuty(duty));
-
-    if (remainingActiveDuties.length === 0) {
+  function handleDutyCompleted() {
+    if (siteDuties.filter(isCleanerActiveDuty).length <= 1) {
       setShowCompletionCelebration(true);
     }
   }
@@ -434,20 +431,6 @@ function CleanerDashboard() {
           onClose={() => setIsIncidentOpen(false)}
         />
       ) : null}
-    </div>
-  );
-}
-
-function CompletionCelebration({ onComplete }: { onComplete: () => void }) {
-  return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-white">
-      <Lottie
-        animationData={successCompleteLottie}
-        loop={false}
-        autoplay
-        className="h-64 w-64 max-w-[80vw]"
-        onComplete={onComplete}
-      />
     </div>
   );
 }
