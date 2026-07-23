@@ -17,15 +17,31 @@ import { useSession } from "../../hooks/use-session";
 import { listAssignedDuties, listDuties, updateDutyStatus, type DutyItem } from "../../services/duties-service";
 import { createIncident, listIncidentsForReporter, listIncidentsForSite } from "../../services/incidents-service";
 import { listNotifications } from "../../services/notifications-service";
+import { getCurrentProfile } from "../../services/profile-service";
 import { listMySites, listSites, type SiteItem } from "../../services/sites-service";
 
 type CleanerFilter = "pending" | "in-progress" | "completed" | "incidents";
+type ManagerDashboardFilter = "pending" | "completed" | "overdue" | "incidents";
 
 const filterTitles: Record<CleanerFilter, string> = {
   pending: "Pending duties",
   "in-progress": "In progress duties",
   completed: "Completed duties",
   incidents: "Reported incidents",
+};
+
+const managerFilterTitles: Record<ManagerDashboardFilter, string> = {
+  pending: "Pending duties",
+  completed: "Completed duties",
+  overdue: "Overdue duties",
+  incidents: "Open incidents",
+};
+
+const managerFilterDescriptions: Record<ManagerDashboardFilter, string> = {
+  pending: "Open work across the active site.",
+  completed: "Completed work across the active site.",
+  overdue: "Duties that need manager review.",
+  incidents: "Open incidents reported this week.",
 };
 
 function isPendingDuty(duty: DutyItem) {
@@ -60,7 +76,13 @@ function percent(value: number, total: number) {
 
 function ManagerDashboard() {
   const navigate = useNavigate();
-  const { userId, companyId, companyName, activeSiteId } = useSession();
+  const { userId, companyId, activeSiteId } = useSession();
+  const [activeFilter, setActiveFilter] = useState<ManagerDashboardFilter | null>(null);
+  const { data: profile } = useQuery({
+    queryKey: ["dashboard-profile", userId],
+    queryFn: () => getCurrentProfile(userId ?? ""),
+    enabled: Boolean(userId),
+  });
   const { data: sites = [] } = useQuery({
     queryKey: ["dashboard-sites", companyId],
     queryFn: () => listSites(companyId ?? ""),
@@ -99,12 +121,35 @@ function ManagerDashboard() {
       { key: "Open incidents", value: openIncidents.length },
     ];
   }, [duties, incidents]);
+  const pendingDuties = duties.filter((duty) => duty.status !== "Completed");
+  const completedDuties = duties.filter((duty) => duty.status === "Completed");
+  const overdueDuties = duties.filter((duty) => duty.status === "Overdue");
+  const openWeeklyIncidents = incidents.filter((incident) => isThisWeek(incident.createdAt) && !incident.resolvedAt);
+  const displayedDuties = useMemo(() => {
+    if (activeFilter === "pending") {
+      return pendingDuties;
+    }
+    if (activeFilter === "completed") {
+      return completedDuties;
+    }
+    if (activeFilter === "overdue") {
+      return overdueDuties;
+    }
+
+    return duties.slice(0, 3);
+  }, [activeFilter, completedDuties, duties, overdueDuties, pendingDuties]);
+  const panelTitle = activeFilter ? managerFilterTitles[activeFilter] : "Today's duties";
+  const panelDescription = activeFilter ? managerFilterDescriptions[activeFilter] : "The highest priority work across the active site.";
+
+  function handleKpiClick(filter: ManagerDashboardFilter) {
+    setActiveFilter((current) => (current === filter ? null : filter));
+  }
 
   return (
     <div className="space-y-8 fade-in">
       <PageHeader
         eyebrow="Dashboard"
-        title={companyName ? `Good morning, ${companyName}` : "Good morning"}
+        title={profile?.full_name ? `Good morning, ${profile.full_name}` : "Good morning"}
         description={
           activeSite
             ? `Track today's workload for ${activeSite.name}, monitor overdue duties, and move quickly from assignment to completion.`
@@ -119,20 +164,36 @@ function ManagerDashboard() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Pending Duties" value={String(duties.filter((duty) => duty.status !== "Completed").length)} detail="Across the selected site" accent={<ListTodo className="h-5 w-5" />} />
-        <StatCard label="Completed Today" value={String(duties.filter((duty) => duty.status === "Completed").length)} detail="For the active site" accent={<Sparkles className="h-5 w-5" />} />
-        <StatCard label="Overdue" value={String(duties.filter((duty) => duty.status === "Overdue").length)} detail="Needs manager review" accent={<CircleAlert className="h-5 w-5" />} />
-        <StatCard label="Incidents" value={String(incidents.filter((incident) => isThisWeek(incident.createdAt) && !incident.resolvedAt).length)} detail="Open this week" accent={<Bell className="h-5 w-5" />} />
+        <StatCard active={activeFilter === "pending"} onClick={() => handleKpiClick("pending")} label="Pending Duties" value={String(pendingDuties.length)} detail="Across the selected site" accent={<ListTodo className="h-5 w-5" />} />
+        <StatCard active={activeFilter === "completed"} onClick={() => handleKpiClick("completed")} label="Completed Today" value={String(completedDuties.length)} detail="For the active site" accent={<Sparkles className="h-5 w-5" />} />
+        <StatCard active={activeFilter === "overdue"} onClick={() => handleKpiClick("overdue")} label="Overdue" value={String(overdueDuties.length)} detail="Needs manager review" accent={<CircleAlert className="h-5 w-5" />} />
+        <StatCard active={activeFilter === "incidents"} onClick={() => handleKpiClick("incidents")} label="Incidents" value={String(openWeeklyIncidents.length)} detail="Open this week" accent={<Bell className="h-5 w-5" />} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <Card className="space-y-6 p-5">
-          <SectionTitle title="Today's duties" description="The highest priority work across the active site." />
+          <SectionTitle title={panelTitle} description={panelDescription} />
           <div className="space-y-3">
-            {duties.length === 0 ? (
-              <p className="text-sm text-slate-500">No duties for this site yet.</p>
+            {activeFilter === "incidents" ? (
+              openWeeklyIncidents.length === 0 ? (
+                <p className="text-sm text-slate-500">No open incidents this week.</p>
+              ) : (
+                openWeeklyIncidents.map((incident) => (
+                  <div key={incident.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="font-medium text-slate-950">{incident.incidentType}</p>
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                        {new Date(incident.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-500">{incident.details}</p>
+                  </div>
+                ))
+              )
+            ) : displayedDuties.length === 0 ? (
+              <p className="text-sm text-slate-500">{activeFilter ? "No duties match this KPI." : "No duties for this site yet."}</p>
             ) : (
-              duties.slice(0, 3).map((item) => (
+              displayedDuties.map((item) => (
                 <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="font-medium text-slate-950">{item.title}</p>

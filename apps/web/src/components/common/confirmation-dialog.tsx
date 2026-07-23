@@ -24,20 +24,22 @@ export function ConfirmationDialog({
   children,
 }: ConfirmationDialogProps) {
   return (
-    <Card className="space-y-4 border border-slate-200 p-5 shadow-xl">
-      <div>
-        <p className="text-lg font-semibold text-slate-950">{title}</p>
-        <p className="mt-1 text-sm text-slate-500">{description}</p>
-      </div>
-      {children}
-      <div className="flex justify-end gap-3">
-        <Button variant="secondary" onClick={onCancel}>
-          {cancelLabel}
-        </Button>
-        <Button variant={destructive ? "ghost" : "primary"} onClick={onConfirm}>
-          {confirmLabel}
-        </Button>
-      </div>
-    </Card>
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+      <Card className="w-full max-w-md space-y-4 border border-slate-200 p-5 shadow-xl">
+        <div>
+          <p className="text-lg font-semibold text-slate-950">{title}</p>
+          <p className="mt-1 text-sm text-slate-500">{description}</p>
+        </div>
+        {children}
+        <div className="flex justify-end gap-3">
+          <Button variant="secondary" onClick={onCancel}>
+            {cancelLabel}
+          </Button>
+          <Button variant={destructive ? "ghost" : "primary"} onClick={onConfirm}>
+            {confirmLabel}
+          </Button>
+        </div>
+      </Card>
+    </div>
   );
 }
