@@ -26,6 +26,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
     enabled: Boolean(companyId),
   });
   const activeSite = sites.find((site) => site.id === activeSiteId) ?? sites[0] ?? null;
+  const activeSiteNotesPreview = activeSite?.notes.trim()
+    ? activeSite.notes.trim().slice(0, 120)
+    : "No important site information has been added yet.";
   const palette = getCompanyPalette(companyPalette);
   const themeStyle = {
     "--company-primary": palette.primary,
@@ -120,15 +123,23 @@ export function AppLayout({ children }: { children: ReactNode }) {
               sites={sites}
               onSelectSite={setActiveSiteId}
             />
-            <div className="rounded-lg p-5 text-white" style={{ backgroundColor: palette.primary }}>
-              <p className="text-xs uppercase tracking-[0.35em] text-white/60">Current context</p>
-              <p className="mt-3 text-2xl font-semibold tracking-tight">{activeSite?.name ?? "No active site"}</p>
+            <button
+              type="button"
+              onClick={() => {
+                if (activeSite) {
+                  navigate(`/sites/${activeSite.id}/info`);
+                }
+              }}
+              disabled={!activeSite}
+              className="rounded-lg p-5 text-left text-white transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
+              style={{ backgroundColor: palette.primary }}
+            >
+              <p className="text-2xl font-semibold tracking-tight">{activeSite?.name ?? "No active site"}</p>
+              <p className="mt-3 line-clamp-2 text-sm text-white/75">{activeSiteNotesPreview}</p>
               <p className="mt-2 text-sm text-white/75">
-                {sites.length > 0
-                  ? `${sites.length} site${sites.length === 1 ? "" : "s"} available in this company`
-                  : "Create a site to start assigning duties and cleaners."}
+                {activeSite ? "Click to view relevant site information." : "Create a site to start adding relevant information."}
               </p>
-            </div>
+            </button>
           </div>
 
           {children}

@@ -166,7 +166,7 @@ function ManagerDashboard() {
         }
         actions={
           <>
-            <Button variant="secondary">View Reports</Button>
+            <Button variant="secondary" onClick={() => navigate("/reports")}>View Reports</Button>
             <Button onClick={() => navigate("/duties?create=1")}>Create Duty</Button>
           </>
         }

@@ -209,6 +209,7 @@ export function DutiesPage() {
   const { companyId, userId, role, activeSiteId: sessionActiveSiteId, setActiveSiteId: setSessionActiveSiteId } = useSession();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dutyListRef = useRef<HTMLDivElement | null>(null);
+  const dutyFormRef = useRef<HTMLElement | null>(null);
   const [search, setSearch] = useState("");
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [editingDuty, setEditingDuty] = useState<DutyItem | null>(null);
@@ -487,6 +488,10 @@ export function DutiesPage() {
       equipment: duty.equipment.join(", "),
       referencePhotos: duty.referencePhotos.join(", "),
       assignedUserIds: duty.assignedUserIds,
+    });
+
+    window.requestAnimationFrame(() => {
+      dutyFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
@@ -775,7 +780,7 @@ export function DutiesPage() {
       </Card>
 
       {role !== "Cleaner" && (showCreate || editingDuty) ? (
-        <Card className="space-y-4 p-5">
+        <Card ref={dutyFormRef} className="scroll-mt-6 space-y-4 p-5">
           <div className="flex items-center justify-between gap-4">
             <SectionTitle
               title={editingDuty ? `Edit ${editingDuty.title}` : "Create duty"}

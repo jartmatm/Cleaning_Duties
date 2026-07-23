@@ -8,6 +8,8 @@ import { DashboardPage } from "../pages/dashboard/DashboardPage";
 import { LoginPage } from "../pages/auth/LoginPage";
 import { ResetPasswordPage } from "../pages/auth/ResetPasswordPage";
 import { DutiesPage } from "../pages/duties/DutiesPage";
+import { ReportsPage } from "../pages/reports/ReportsPage";
+import { SiteInfoPage } from "../pages/sites/SiteInfoPage";
 import { SitesPage } from "../pages/sites/SitesPage";
 import { UsersPage } from "../pages/users/UsersPage";
 import { ProtectedRoute } from "../routes/protected-route";
@@ -20,7 +22,16 @@ import { SettingsPage } from "../pages/settings/SettingsPage";
 import { PreloadedDutiesPage } from "../pages/settings/PreloadedDutiesPage";
 import { AppLoader } from "../components/common/app-loader";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchInterval: 20_000,
+      refetchIntervalInBackground: false,
+      refetchOnWindowFocus: true,
+      staleTime: 10_000,
+    },
+  },
+});
 
 export function App() {
   const { setSession, setEmail, clearSession, setSessionLoading } = useSession();
@@ -178,11 +189,31 @@ function AppRoutes() {
             }
           />
           <Route
+            path="/sites/:siteId/info"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <SiteInfoPage />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/duties"
             element={
               <ProtectedRoute>
                 <AppLayout>
                   <DutiesPage />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <ReportsPage />
                 </AppLayout>
               </ProtectedRoute>
             }
