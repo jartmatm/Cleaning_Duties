@@ -14,9 +14,10 @@ type CleanerDutyDetailModalProps = {
   site: SiteItem | null;
   userId: string | null;
   onClose: () => void;
+  onCompleted?: (duty: DutyItem) => void;
 };
 
-export function CleanerDutyDetailModal({ duty, site, userId, onClose }: CleanerDutyDetailModalProps) {
+export function CleanerDutyDetailModal({ duty, site, userId, onClose, onCompleted }: CleanerDutyDetailModalProps) {
   const queryClient = useQueryClient();
   const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
   const [afterFiles, setAfterFiles] = useState<File[]>([]);
@@ -45,10 +46,11 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose }: CleanerD
       await addDutyComment({ dutyId: duty.id, profileId: userId, body: comment });
       return updateDutyStatus(duty.id, "Completed");
     },
-    onSuccess: async () => {
+    onSuccess: async (completedDuty) => {
       await queryClient.invalidateQueries({ queryKey: ["cleaner-assigned-duties", userId] });
       await queryClient.invalidateQueries({ queryKey: ["duties"] });
       notify({ tone: "success", title: "Duty completed", message: "The duty was marked as completed." });
+      onCompleted?.(completedDuty);
       onClose();
     },
     onError: (error) => notify({ tone: "error", title: "Could not complete duty", message: error instanceof Error ? error.message : "Unknown error" }),

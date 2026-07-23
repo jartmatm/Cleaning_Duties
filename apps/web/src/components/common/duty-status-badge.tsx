@@ -9,6 +9,8 @@ const dutyStatusStyles: Record<DutyStatus, string> = {
   Completed: "border-emerald-200 bg-emerald-50 text-emerald-800",
   Incomplete: "border-rose-200 bg-rose-50 text-rose-800",
   Overdue: "border-red-200 bg-red-50 text-red-800",
+  Missed: "border-orange-200 bg-orange-50 text-orange-800",
+  Archived: "border-zinc-200 bg-zinc-100 text-zinc-700",
 };
 
 type DutyStatusBadgeProps = {

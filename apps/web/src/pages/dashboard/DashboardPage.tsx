@@ -2,6 +2,7 @@ import { INCIDENT_TYPES, type IncidentType } from "@cleaning-duties/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { arc, pie, type PieArcDatum } from "d3";
 import { Bell, CheckCircle2, CircleAlert, ClipboardList, ListTodo, Loader2, Send, Sparkles, X } from "lucide-react";
+import Lottie from "lottie-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
@@ -19,6 +20,7 @@ import { createIncident, listIncidentsForReporter, listIncidentsForSite } from "
 import { listNotifications } from "../../services/notifications-service";
 import { getCurrentProfile } from "../../services/profile-service";
 import { listMySites, listSites, type SiteItem } from "../../services/sites-service";
+import successCompleteLottie from "../../assets/success-complete-lottie.json";
 
 type CleanerFilter = "pending" | "in-progress" | "completed" | "incidents";
 type ManagerDashboardFilter = "pending" | "completed" | "overdue" | "incidents";
@@ -46,6 +48,14 @@ const managerFilterDescriptions: Record<ManagerDashboardFilter, string> = {
 
 function isPendingDuty(duty: DutyItem) {
   return duty.status === "Pending" || duty.status === "Draft" || duty.status === "Overdue";
+}
+
+function isActiveDuty(duty: DutyItem) {
+  return duty.status !== "Completed" && duty.status !== "Archived" && duty.status !== "Missed";
+}
+
+function isCleanerActiveDuty(duty: DutyItem) {
+  return duty.status === "Pending" || duty.status === "Draft" || duty.status === "Overdue" || duty.status === "In Progress";
 }
 
 function isThisWeek(dateValue: string | null) {
@@ -110,7 +120,7 @@ function ManagerDashboard() {
     const reportDuties = weeklyDuties.length > 0 ? weeklyDuties : duties;
     const completedDuties = reportDuties.filter((duty) => duty.status === "Completed");
     const onTimeDuties = completedDuties.filter((duty) => !duty.dueDate || new Date(duty.updatedAt) <= new Date(duty.dueDate));
-    const activeDuties = reportDuties.filter((duty) => duty.status !== "Completed");
+    const activeDuties = reportDuties.filter(isActiveDuty);
     const weeklyIncidents = incidents.filter((incident) => isThisWeek(incident.createdAt));
     const openIncidents = weeklyIncidents.filter((incident) => !incident.resolvedAt);
 
@@ -121,7 +131,7 @@ function ManagerDashboard() {
       { key: "Open incidents", value: openIncidents.length },
     ];
   }, [duties, incidents]);
-  const pendingDuties = duties.filter((duty) => duty.status !== "Completed");
+  const pendingDuties = duties.filter(isActiveDuty);
   const completedDuties = duties.filter((duty) => duty.status === "Completed");
   const overdueDuties = duties.filter((duty) => duty.status === "Overdue");
   const openWeeklyIncidents = incidents.filter((incident) => isThisWeek(incident.createdAt) && !incident.resolvedAt);
@@ -273,6 +283,7 @@ function CleanerDashboard() {
   const [activeFilter, setActiveFilter] = useState<CleanerFilter>("in-progress");
   const [selectedDuty, setSelectedDuty] = useState<DutyItem | null>(null);
   const [isIncidentOpen, setIsIncidentOpen] = useState(false);
+  const [showCompletionCelebration, setShowCompletionCelebration] = useState(false);
 
   const { data: sites = [] } = useQuery({
     queryKey: ["cleaner-sites", userId],
@@ -347,6 +358,14 @@ function CleanerDashboard() {
     });
   }
 
+  function handleDutyCompleted(completedDuty: DutyItem) {
+    const remainingActiveDuties = siteDuties.filter((duty) => duty.id !== completedDuty.id && isCleanerActiveDuty(duty));
+
+    if (remainingActiveDuties.length === 0) {
+      setShowCompletionCelebration(true);
+    }
+  }
+
   return (
     <div className="space-y-8 fade-in">
       <PageHeader
@@ -397,8 +416,13 @@ function CleanerDashboard() {
           duty={selectedDuty}
           site={siteById.get(selectedDuty.siteId) ?? null}
           userId={userId}
+          onCompleted={handleDutyCompleted}
           onClose={() => setSelectedDuty(null)}
         />
+      ) : null}
+
+      {showCompletionCelebration ? (
+        <CompletionCelebration onComplete={() => setShowCompletionCelebration(false)} />
       ) : null}
 
       {isIncidentOpen ? (
@@ -410,6 +434,20 @@ function CleanerDashboard() {
           onClose={() => setIsIncidentOpen(false)}
         />
       ) : null}
+    </div>
+  );
+}
+
+function CompletionCelebration({ onComplete }: { onComplete: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-white">
+      <Lottie
+        animationData={successCompleteLottie}
+        loop={false}
+        autoplay
+        className="h-64 w-64 max-w-[80vw]"
+        onComplete={onComplete}
+      />
     </div>
   );
 }

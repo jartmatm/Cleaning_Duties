@@ -86,21 +86,25 @@ export async function replaceDutyAssignments(dutyId: string, siteId: string, ass
     throw new Error("Duty assignments were not saved. Check manager permissions for this site.");
   }
 
-  const response = await fetch(apiUrl("/duty-notifications/assignments"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      dutyId,
-      siteId,
-      assignedUserIds: uniqueAssignedUserIds,
-      assignedBy,
-    }),
-  });
+  try {
+    const response = await fetch(apiUrl("/duty-notifications/assignments"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        dutyId,
+        siteId,
+        assignedUserIds: uniqueAssignedUserIds,
+        assignedBy,
+      }),
+    });
 
-  if (!response.ok) {
-    const text = await response.text();
-    console.warn("Duty notification request failed", text);
+    if (!response.ok) {
+      const text = await response.text();
+      console.warn("Duty notification request failed", text);
+    }
+  } catch (error) {
+    console.warn("Duty notification request failed", error);
   }
 }

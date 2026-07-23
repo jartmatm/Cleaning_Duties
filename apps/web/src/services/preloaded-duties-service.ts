@@ -1,4 +1,4 @@
-import { dutyFormSchema, type DutyFormInput } from "@cleaning-duties/shared";
+import { dutyFormSchema, type DutyFormInput, type DutyStatus } from "@cleaning-duties/shared";
 import { supabase } from "./supabase-client";
 
 export type PreloadedDutyRow = {
@@ -8,7 +8,7 @@ export type PreloadedDutyRow = {
   title: string;
   description: string;
   priority: "Urgent" | "High" | "Medium" | "Low" | "Periodical";
-  status: "Draft" | "Pending" | "In Progress" | "Completed" | "Incomplete" | "Overdue";
+  status: DutyStatus;
   equipment: string[];
   reference_photos: string[];
   created_at: string;

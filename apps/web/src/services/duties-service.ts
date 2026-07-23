@@ -1,4 +1,4 @@
-import { dutyFormSchema, type DutyFormInput } from "@cleaning-duties/shared";
+import { dutyFormSchema, type DutyFormInput, type DutyStatus } from "@cleaning-duties/shared";
 import { supabase } from "./supabase-client";
 import { replaceDutyAssignments } from "./assignments-service";
 
@@ -9,7 +9,7 @@ export type DutyRow = {
   title: string;
   description: string;
   priority: "Urgent" | "High" | "Medium" | "Low" | "Periodical";
-  status: "Draft" | "Pending" | "In Progress" | "Completed" | "Incomplete" | "Overdue";
+  status: DutyStatus;
   due_date: string | null;
   recurring: boolean;
   recurring_rule: string | null;
@@ -103,8 +103,169 @@ function parseCsvList(value: string | undefined) {
     .filter(Boolean);
 }
 
+function buildRecurringRule(values: { priority: DutyRow["priority"]; recurringPattern?: string; recurringInterval?: number; recurringWeekday?: number; recurringWeekdays?: number[] }) {
+  if (values.priority !== "Periodical") {
+    return null;
+  }
+
+  const pattern = values.recurringPattern || "daily";
+  const interval = Math.max(Number(values.recurringInterval) || 1, 1);
+
+  return JSON.stringify({ pattern, interval, weekday: values.recurringWeekday ?? 1, weekdays: values.recurringWeekdays?.length ? values.recurringWeekdays : [1] });
+}
+
+type RecurringRule = {
+  pattern: string;
+  interval: number;
+  weekday: number;
+  weekdays: number[];
+};
+
+function parseRecurringRule(rule: string | null): RecurringRule {
+  if (!rule) {
+    return { pattern: "daily", interval: 1, weekday: 1, weekdays: [1] };
+  }
+
+  try {
+    const parsed = JSON.parse(rule) as Partial<RecurringRule>;
+    const weekday = Number.isInteger(parsed.weekday) ? parsed.weekday ?? 1 : 1;
+    return {
+      pattern: parsed.pattern || "daily",
+      interval: Math.max(Number(parsed.interval) || 1, 1),
+      weekday,
+      weekdays: Array.isArray(parsed.weekdays) && parsed.weekdays.length > 0 ? parsed.weekdays.map(Number) : [weekday],
+    };
+  } catch {
+    return { pattern: "daily", interval: 1, weekday: 1, weekdays: [1] };
+  }
+}
+
+function addMonths(date: Date, months: number) {
+  const next = new Date(date);
+  const originalDate = next.getDate();
+  next.setMonth(next.getMonth() + months);
+  if (next.getDate() !== originalDate) {
+    next.setDate(0);
+  }
+  return next;
+}
+
+function nextWeeklyDate(afterDate: Date, weekdays: number[]) {
+  const selectedWeekdays = [...new Set(weekdays)].sort((a, b) => a - b);
+  for (let dayOffset = 1; dayOffset <= 7; dayOffset += 1) {
+    const next = new Date(afterDate);
+    next.setDate(afterDate.getDate() + dayOffset);
+    if (selectedWeekdays.includes(next.getDay())) {
+      return next;
+    }
+  }
+  const fallback = new Date(afterDate);
+  fallback.setDate(afterDate.getDate() + 7);
+  return fallback;
+}
+
+function getNextRecurringDueDate(dueDate: string | null, rule: string | null) {
+  if (!dueDate) {
+    return null;
+  }
+
+  const currentDueDate = new Date(dueDate);
+  if (Number.isNaN(currentDueDate.getTime())) {
+    return null;
+  }
+
+  const recurringRule = parseRecurringRule(rule);
+  if (recurringRule.pattern === "daily") {
+    const next = new Date(currentDueDate);
+    next.setDate(currentDueDate.getDate() + 1);
+    return next;
+  }
+  if (recurringRule.pattern === "weekly") {
+    return nextWeeklyDate(currentDueDate, recurringRule.weekdays);
+  }
+  if (recurringRule.pattern === "monthly") {
+    return addMonths(currentDueDate, 1);
+  }
+  return addMonths(currentDueDate, 12);
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(date.getDate() + days);
+  return next;
+}
+
+async function advanceDutySchedule(duties: DutyItem[]) {
+  const now = new Date();
+  const advancedDutyIds = new Set<string>();
+
+  for (const duty of duties) {
+    if (!duty.dueDate || duty.status === "Archived" || duty.status === "Missed") {
+      continue;
+    }
+
+    if (!duty.recurring) {
+      const missedAt = addDays(new Date(duty.dueDate), 30);
+      if (now >= missedAt && duty.status !== "Completed") {
+        await supabase
+          .from("cleaning_duties")
+          .update({ status: "Missed", updated_at: now.toISOString() })
+          .eq("id", duty.id);
+        advancedDutyIds.add(duty.id);
+      }
+      continue;
+    }
+
+    const nextDueDate = getNextRecurringDueDate(duty.dueDate, duty.recurringRule);
+    if (!nextDueDate || now < nextDueDate) {
+      continue;
+    }
+
+    const nextStatus: DutyStatus = duty.status === "Completed" ? "Archived" : "Missed";
+    await supabase
+      .from("cleaning_duties")
+      .update({ status: nextStatus, updated_at: now.toISOString() })
+      .eq("id", duty.id);
+
+    const { data: createdDuty, error: createError } = await supabase
+      .from("cleaning_duties")
+      .insert({
+        site_id: duty.siteId,
+        created_by: duty.createdBy,
+        title: duty.title,
+        description: duty.description,
+        priority: duty.priority,
+        status: "Pending",
+        due_date: nextDueDate.toISOString(),
+        recurring: true,
+        recurring_rule: duty.recurringRule,
+        equipment: duty.equipment,
+        reference_photos: duty.referencePhotos,
+      })
+      .select("id")
+      .single();
+
+    if (createError) {
+      throw new Error(createError.message);
+    }
+
+    const newDutyId = (createdDuty as { id: string }).id;
+    await replaceDutyAssignments(newDutyId, duty.siteId, duty.assignedUserIds, duty.createdBy);
+    advancedDutyIds.add(duty.id);
+  }
+
+  return advancedDutyIds.size > 0;
+}
+
 function toFormInput(values: DutyFormInput) {
   const parsed = dutyFormSchema.parse(values);
+  const recurringRule = buildRecurringRule({
+    priority: parsed.priority,
+    recurringPattern: parsed.recurringPattern,
+    recurringInterval: parsed.recurringInterval,
+    recurringWeekday: parsed.recurringWeekday,
+    recurringWeekdays: parsed.recurringWeekdays,
+  });
 
   return {
     title: parsed.title,
@@ -112,13 +273,15 @@ function toFormInput(values: DutyFormInput) {
     priority: parsed.priority,
     status: parsed.status,
     dueDate: parsed.dueDate ? new Date(parsed.dueDate).toISOString() : null,
+    recurring: parsed.priority === "Periodical",
+    recurring_rule: recurringRule,
     equipment: parseCsvList(parsed.equipment),
     reference_photos: parseCsvList(parsed.referencePhotos),
     assignedUserIds: parsed.assignedUserIds ?? [],
   };
 }
 
-export async function listDuties(siteId: string, search = "") {
+export async function listDuties(siteId: string, search = "", advanceSchedule = true) {
   let query = supabase
     .from("cleaning_duties")
     .select("id, site_id, created_by, title, description, priority, status, due_date, recurring, recurring_rule, equipment, reference_photos, completion_photos, before_photos, after_photos, created_at, updated_at")
@@ -134,10 +297,17 @@ export async function listDuties(siteId: string, search = "") {
     throw new Error(error.message);
   }
 
-  return attachDutyAssignments((data ?? []).map((row) => mapDuty(row as DutyRow)));
+  const duties = await attachDutyAssignments((data ?? []).map((row) => mapDuty(row as DutyRow)));
+  const advanced = advanceSchedule ? await advanceDutySchedule(duties) : false;
+
+  if (advanced) {
+    return listDuties(siteId, search, false);
+  }
+
+  return duties;
 }
 
-export async function listAssignedDuties(profileId: string) {
+export async function listAssignedDuties(profileId: string, advanceSchedule = true) {
   const { data, error } = await supabase
     .from("duty_assignments")
     .select(
@@ -149,11 +319,19 @@ export async function listAssignedDuties(profileId: string) {
     throw new Error(error.message);
   }
 
-  return (data ?? [])
+  const duties = (data ?? [])
     .map((row) => (row as unknown as { cleaning_duties: DutyRow | null }).cleaning_duties)
     .filter((row): row is DutyRow => row !== null)
     .map((row) => ({ ...mapDuty(row), assignedUserIds: [profileId] }))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const advanced = advanceSchedule ? await advanceDutySchedule(duties) : false;
+
+  if (advanced) {
+    return listAssignedDuties(profileId, false);
+  }
+
+  return duties;
 }
 
 export async function createDuty(siteId: string, createdBy: string, values: DutyFormInput) {
@@ -168,6 +346,8 @@ export async function createDuty(siteId: string, createdBy: string, values: Duty
       priority: payload.priority,
       status: payload.status,
       due_date: payload.dueDate,
+      recurring: payload.recurring,
+      recurring_rule: payload.recurring_rule,
       equipment: payload.equipment,
       reference_photos: payload.reference_photos,
     })
@@ -193,6 +373,8 @@ export async function updateDuty(dutyId: string, values: DutyFormInput) {
       priority: payload.priority,
       status: payload.status,
       due_date: payload.dueDate,
+      recurring: payload.recurring,
+      recurring_rule: payload.recurring_rule,
       equipment: payload.equipment,
       reference_photos: payload.reference_photos,
     })

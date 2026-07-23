@@ -30,6 +30,7 @@ type ReferencePhotoItem = {
   status: "uploading" | "done" | "error";
   fileName: string;
 };
+const EDITABLE_DUTY_STATUSES = DUTY_STATUSES.filter((status) => status !== "Archived" && status !== "Missed");
 
 export function PreloadedDutiesPage() {
   const queryClient = useQueryClient();
@@ -297,7 +298,7 @@ export function PreloadedDutiesPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Default status</label>
               <select {...form.register("status")} className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm">
-                {DUTY_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+                {EDITABLE_DUTY_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
               </select>
             </div>
             <div className="space-y-2 lg:col-span-2">

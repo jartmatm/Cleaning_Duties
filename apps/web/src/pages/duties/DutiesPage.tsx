@@ -36,6 +36,157 @@ type ManagerStatusFilter = DutyItem["status"] | "All";
 const CLEANER_DUTY_FILTERS: CleanerDutyFilter[] = ["Pending", "In Progress", "Completed", "Incomplete", "All"];
 const MANAGER_PRIORITY_FILTERS: ManagerPriorityFilter[] = ["All", ...DUTY_PRIORITIES];
 const MANAGER_STATUS_FILTERS: ManagerStatusFilter[] = ["All", ...DUTY_STATUSES];
+const EDITABLE_DUTY_STATUSES = DUTY_STATUSES.filter((status) => status !== "Archived" && status !== "Missed");
+const RECURRENCE_OPTIONS = [
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+  { value: "yearly", label: "Yearly" },
+] as const;
+const WEEKDAY_OPTIONS = [
+  { value: 1, label: "Monday" },
+  { value: 2, label: "Tuesday" },
+  { value: 3, label: "Wednesday" },
+  { value: 4, label: "Thursday" },
+  { value: 5, label: "Friday" },
+  { value: 6, label: "Saturday" },
+  { value: 0, label: "Sunday" },
+] as const;
+
+function parseRecurringRule(rule: string | null): { pattern: string; interval: number; weekday: number; weekdays: number[] } {
+  if (!rule) {
+    return { pattern: "daily", interval: 1, weekday: 1, weekdays: [1] };
+  }
+
+  try {
+    const parsed = JSON.parse(rule) as { pattern?: string; interval?: number; weekday?: number; weekdays?: number[] };
+    const weekdays = Array.isArray(parsed.weekdays) && parsed.weekdays.length > 0 ? parsed.weekdays : [Number.isInteger(parsed.weekday) ? parsed.weekday ?? 1 : 1];
+    return {
+      pattern: parsed.pattern || "daily",
+      interval: Math.max(Number(parsed.interval) || 1, 1),
+      weekday: Number.isInteger(parsed.weekday) ? Number(parsed.weekday) : 1,
+      weekdays,
+    };
+  } catch {
+    return { pattern: "daily", interval: 1, weekday: 1, weekdays: [1] };
+  }
+}
+
+function addMonths(date: Date, months: number) {
+  const next = new Date(date);
+  const originalDate = next.getDate();
+  next.setMonth(next.getMonth() + months);
+
+  if (next.getDate() !== originalDate) {
+    next.setDate(0);
+  }
+
+  return next;
+}
+
+function getRecurrenceStep(pattern: string, interval: number) {
+  if (pattern === "daily") {
+    return { unit: "days", value: 1 };
+  }
+  if (pattern === "weekly") {
+    return { unit: "days", value: 7 };
+  }
+  if (pattern === "monthly") {
+    return { unit: "months", value: 1 };
+  }
+  return { unit: "months", value: 12 };
+}
+
+function getNextWeekday(date: Date, weekday: number, includeCurrent = true) {
+  const next = new Date(date);
+  const daysUntilWeekday = (weekday - next.getDay() + 7) % 7;
+  next.setDate(next.getDate() + (daysUntilWeekday === 0 && !includeCurrent ? 7 : daysUntilWeekday));
+  return next;
+}
+
+function getUpcomingOccurrences(dateValue: string, pattern: string, interval: number, weekdays: number[] = [1]) {
+  if (!dateValue) {
+    return [];
+  }
+
+  const startDate = new Date(dateValue);
+  if (Number.isNaN(startDate.getTime())) {
+    return [];
+  }
+
+  if (pattern === "weekly") {
+    const selectedWeekdays = [...new Set(weekdays)].sort((a, b) => a - b);
+    const occurrences: Date[] = [];
+    let cursor = new Date(startDate);
+
+    while (occurrences.length < 6) {
+      const nextDates = selectedWeekdays
+        .map((weekday) => getNextWeekday(cursor, weekday, occurrences.length === 0))
+        .sort((a, b) => a.getTime() - b.getTime());
+      const next = nextDates.find((date) => date >= cursor);
+
+      if (!next) {
+        cursor.setDate(cursor.getDate() + 1);
+        continue;
+      }
+
+      occurrences.push(next);
+      cursor = new Date(next);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return occurrences;
+  }
+
+  const step = getRecurrenceStep(pattern, interval);
+  const occurrences = [startDate];
+
+  for (let index = 1; index < 6; index += 1) {
+    const previous = occurrences[index - 1];
+    if (!previous) {
+      break;
+    }
+
+    if (step.unit === "months") {
+      occurrences.push(addMonths(previous, step.value));
+    } else {
+      const next = new Date(previous);
+      next.setDate(previous.getDate() + step.value);
+      occurrences.push(next);
+    }
+  }
+
+  return occurrences;
+}
+
+function normalizeWeekdays(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map(Number).filter((weekday) => Number.isInteger(weekday) && weekday >= 0 && weekday <= 6);
+  }
+  if (value === undefined || value === null || value === false) {
+    return [];
+  }
+  const weekday = Number(value);
+  return Number.isInteger(weekday) && weekday >= 0 && weekday <= 6 ? [weekday] : [];
+}
+
+function toWeekdayFormValues(weekdays: number[]) {
+  return weekdays.map((weekday) => String(weekday));
+}
+
+function toDateTimeLocalValue(dateValue: string | null) {
+  if (!dateValue) {
+    return "";
+  }
+
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const timezoneOffsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - timezoneOffsetMs).toISOString().slice(0, 16);
+}
 
 function getInitials(name: string) {
   return name
@@ -108,12 +259,21 @@ export function DutiesPage() {
       priority: "Medium",
       status: "Draft",
       dueDate: "",
+      recurringPattern: "daily",
+      recurringInterval: 1,
+      recurringWeekday: 1,
+      recurringWeekdays: ["1"],
       equipment: "",
       referencePhotos: "",
       assignedUserIds: [],
     },
   });
   const watchedTitle = form.watch("title");
+  const watchedPriority = form.watch("priority");
+  const watchedDueDate = form.watch("dueDate");
+  const watchedRecurringPattern = form.watch("recurringPattern");
+  const watchedRecurringInterval = form.watch("recurringInterval");
+  const watchedRecurringWeekdays = form.watch("recurringWeekdays");
 
   useEffect(() => {
     form.setValue(
@@ -122,6 +282,15 @@ export function DutiesPage() {
       { shouldDirty: true, shouldValidate: true },
     );
   }, [form, referencePhotoItems]);
+
+  useEffect(() => {
+    if (watchedPriority === "Periodical" && !watchedRecurringPattern) {
+      form.setValue("recurringPattern", "daily", { shouldDirty: true });
+      form.setValue("recurringInterval", 1, { shouldDirty: true });
+      form.setValue("recurringWeekday", 1, { shouldDirty: true });
+      form.setValue("recurringWeekdays", ["1"], { shouldDirty: true });
+    }
+  }, [form, watchedPriority, watchedRecurringPattern]);
 
   const createMutation = useMutation({
     mutationFn: (values: DutyFormInput) => {
@@ -237,6 +406,12 @@ export function DutiesPage() {
       })
       .slice(0, 5);
   }, [editingDuty, hasSelectedPreloadedDuty, preloadedDuties, role, watchedTitle]);
+  const recurrencePreviewDates = useMemo(
+    () => watchedPriority === "Periodical"
+      ? getUpcomingOccurrences(watchedDueDate || "", watchedRecurringPattern || "daily", Number(watchedRecurringInterval) || 1, normalizeWeekdays(watchedRecurringWeekdays).length ? normalizeWeekdays(watchedRecurringWeekdays) : [1])
+      : [],
+    [watchedDueDate, watchedPriority, watchedRecurringInterval, watchedRecurringPattern, watchedRecurringWeekdays],
+  );
 
   useEffect(() => {
     if (sessionActiveSiteId) {
@@ -256,6 +431,10 @@ export function DutiesPage() {
       priority: "Medium",
       status: "Draft",
       dueDate: "",
+      recurringPattern: "daily",
+      recurringInterval: 1,
+      recurringWeekday: 1,
+      recurringWeekdays: ["1"],
       equipment: "",
       referencePhotos: "",
       assignedUserIds: [],
@@ -275,6 +454,7 @@ export function DutiesPage() {
   }, [role, searchParams, setSearchParams]);
 
   function startEdit(duty: DutyItem) {
+    const recurringRule = parseRecurringRule(duty.recurringRule);
     setShowCreate(false);
     setShowPhotoModal(false);
     setHasSelectedPreloadedDuty(false);
@@ -293,7 +473,11 @@ export function DutiesPage() {
       description: duty.description,
       priority: duty.priority,
       status: duty.status,
-      dueDate: duty.dueDate ? duty.dueDate.slice(0, 16) : "",
+      dueDate: toDateTimeLocalValue(duty.dueDate),
+      recurringPattern: recurringRule.pattern,
+      recurringInterval: recurringRule.interval,
+      recurringWeekday: recurringRule.weekday,
+      recurringWeekdays: toWeekdayFormValues(recurringRule.weekdays),
       equipment: duty.equipment.join(", "),
       referencePhotos: duty.referencePhotos.join(", "),
       assignedUserIds: duty.assignedUserIds,
@@ -317,6 +501,10 @@ export function DutiesPage() {
       priority: template.priority,
       status: template.status,
       dueDate: "",
+      recurringPattern: "daily",
+      recurringInterval: 1,
+      recurringWeekday: 1,
+      recurringWeekdays: ["1"],
       equipment: template.equipment.join(", "),
       referencePhotos: template.referencePhotos.join(", "),
       assignedUserIds: form.getValues("assignedUserIds") ?? [],
@@ -401,6 +589,11 @@ export function DutiesPage() {
   async function onSubmit(values: DutyFormInput) {
     if (referencePhotoItems.some((photo) => photo.status === "uploading")) {
       notify({ tone: "error", title: "Photos still uploading", message: "Wait for uploads to finish before saving the duty." });
+      return;
+    }
+
+    if (values.priority === "Periodical" && values.recurringPattern === "weekly" && normalizeWeekdays(values.recurringWeekdays).length === 0) {
+      notify({ tone: "error", title: "Select weekdays", message: "Choose at least one weekday for weekly duties." });
       return;
     }
 
@@ -646,7 +839,7 @@ export function DutiesPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Status</label>
               <select {...form.register("status")} className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm">
-                {DUTY_STATUSES.map((status) => (
+                {EDITABLE_DUTY_STATUSES.map((status) => (
                   <option key={status} value={status}>
                     {status}
                   </option>
@@ -657,6 +850,52 @@ export function DutiesPage() {
               <label className="text-sm font-medium">Due date</label>
               <Input type="datetime-local" {...form.register("dueDate")} />
             </div>
+            {watchedPriority === "Periodical" ? (
+              <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:col-span-2">
+                <div className="grid gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Recurrence</label>
+                    <select
+                      {...form.register("recurringPattern")}
+                      className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm"
+                    >
+                      {RECURRENCE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {watchedRecurringPattern === "weekly" ? (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Repeat on</label>
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                        {WEEKDAY_OPTIONS.map((weekday) => (
+                          <label key={weekday.value} className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
+                            <input type="checkbox" value={weekday.value} {...form.register("recurringWeekdays")} />
+                            <span>{weekday.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+                {recurrencePreviewDates.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Upcoming dates</p>
+                    <div className="flex flex-wrap gap-2">
+                      {recurrencePreviewDates.map((date) => (
+                        <span key={date.toISOString()} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                          {date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">Select a due date to preview the upcoming dates.</p>
+                )}
+              </div>
+            ) : null}
             <div className="space-y-2">
               <label className="text-sm font-medium">Equipment required</label>
               <Input {...form.register("equipment")} placeholder="Vacuum, Mop, Gloves" />
