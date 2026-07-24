@@ -1,5 +1,5 @@
 import { Check, Filter, Loader2, Plus, Search, Pencil, Upload, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -20,7 +20,13 @@ import { useSession } from "../../hooks/use-session";
 import { dutyFormSchema, type DutyFormInput, DUTY_PRIORITIES, DUTY_STATUSES } from "@cleaning-duties/shared";
 import { notify } from "../../components/common/toast";
 import { uploadDutyReferencePhoto } from "../../services/duty-photo-service";
-import { listPreloadedDuties, type PreloadedDutyItem } from "../../services/preloaded-duties-service";
+import {
+  createPreloadedDuty,
+  deletePreloadedDuty,
+  listPreloadedDuties,
+  updatePreloadedDuty,
+  type PreloadedDutyItem,
+} from "../../services/preloaded-duties-service";
 
 type ReferencePhotoItem = {
   id: string;
@@ -53,6 +59,31 @@ const WEEKDAY_OPTIONS = [
   { value: 6, label: "Saturday" },
   { value: 0, label: "Sunday" },
 ] as const;
+const DUTY_DESCRIPTION_PREVIEW_LENGTH = 100;
+
+function getDutyDescriptionPreview(description: string) {
+  const normalizedDescription = description.trim().replace(/\s+/g, " ");
+
+  if (!normalizedDescription) {
+    return "No description";
+  }
+
+  if (normalizedDescription.length <= DUTY_DESCRIPTION_PREVIEW_LENGTH) {
+    return normalizedDescription;
+  }
+
+  return `${normalizedDescription.slice(0, DUTY_DESCRIPTION_PREVIEW_LENGTH).trimEnd()}...`;
+}
+
+function findMatchingPreloadedDuty(preloadedDuties: PreloadedDutyItem[], title: string) {
+  const normalizedTitle = title.trim().toLowerCase();
+
+  if (!normalizedTitle) {
+    return null;
+  }
+
+  return preloadedDuties.find((template) => template.title.trim().toLowerCase() === normalizedTitle) ?? null;
+}
 
 function parseRecurringRule(rule: string | null): { pattern: string; interval: number; weekday: number; weekdays: number[] } {
   if (!rule) {
@@ -223,6 +254,8 @@ export function DutiesPage() {
   const [cleanerDutyFilter, setCleanerDutyFilter] = useState<CleanerDutyFilter>("Pending");
   const [managerPriorityFilter, setManagerPriorityFilter] = useState<ManagerPriorityFilter>("All");
   const [managerStatusFilter, setManagerStatusFilter] = useState<ManagerStatusFilter>("All");
+  const [saveAsPreloadedDuty, setSaveAsPreloadedDuty] = useState(false);
+  const [linkedPreloadedDutyId, setLinkedPreloadedDutyId] = useState<string | null>(null);
 
   const { data: sites = [] } = useQuery({
     queryKey: role === "Cleaner" ? ["sites", "cleaner", userId] : ["sites", companyId],
@@ -307,15 +340,36 @@ export function DutiesPage() {
 
       return createDuty(activeSiteId, userId, values);
     },
-    onSuccess: async () => {
+    onSuccess: async (_createdDuty, values) => {
+      let preloadedDutyCreated = false;
+
+      if (saveAsPreloadedDuty && companyId && userId) {
+        try {
+          await createPreloadedDuty(companyId, userId, values);
+          preloadedDutyCreated = true;
+        } catch (error) {
+          notify({
+            tone: "error",
+            title: "Duty created, template failed",
+            message: error instanceof Error ? error.message : "Could not add this duty to preloaded duties.",
+          });
+        }
+      }
+
       await queryClient.invalidateQueries({ queryKey: ["duties"] });
       await queryClient.invalidateQueries({ queryKey: ["cleaner-assigned-duties"] });
+      await queryClient.invalidateQueries({ queryKey: ["preloaded-duties", companyId] });
       await queryClient.refetchQueries({ queryKey: ["duties", activeSiteId, search] });
       setShowCreate(false);
       setHasSelectedPreloadedDuty(false);
+      setSaveAsPreloadedDuty(false);
       setReferencePhotoItems([]);
       form.reset();
-      notify({ tone: "success", title: "Duty created", message: "The duty was saved successfully." });
+      notify({
+        tone: "success",
+        title: "Duty created",
+        message: preloadedDutyCreated ? "The duty was saved and added to preloaded duties." : "The duty was saved successfully.",
+      });
     },
     onError: (error) => {
       notify({ tone: "error", title: "Could not create duty", message: error instanceof Error ? error.message : "Unknown error" });
@@ -324,15 +378,51 @@ export function DutiesPage() {
 
   const updateMutation = useMutation({
     mutationFn: ({ dutyId, values }: { dutyId: string; values: DutyFormInput }) => updateDuty(dutyId, values),
-    onSuccess: async () => {
+    onSuccess: async (_updatedDuty, { values }) => {
+      let preloadedDutyAction: "created" | "updated" | "removed" | null = null;
+      const matchingTemplate = linkedPreloadedDutyId
+        ? preloadedDuties.find((template) => template.id === linkedPreloadedDutyId) ?? null
+        : findMatchingPreloadedDuty(preloadedDuties, editingDuty?.title ?? values.title);
+
+      if (companyId && userId) {
+        try {
+          if (saveAsPreloadedDuty && matchingTemplate) {
+            await updatePreloadedDuty(matchingTemplate.id, values);
+            preloadedDutyAction = "updated";
+          } else if (saveAsPreloadedDuty) {
+            await createPreloadedDuty(companyId, userId, values);
+            preloadedDutyAction = "created";
+          } else if (matchingTemplate) {
+            await deletePreloadedDuty(matchingTemplate.id);
+            preloadedDutyAction = "removed";
+          }
+        } catch (error) {
+          notify({
+            tone: "error",
+            title: "Duty updated, template sync failed",
+            message: error instanceof Error ? error.message : "Could not update the preloaded duty.",
+          });
+        }
+      }
+
       await queryClient.invalidateQueries({ queryKey: ["duties"] });
       await queryClient.invalidateQueries({ queryKey: ["cleaner-assigned-duties"] });
+      await queryClient.invalidateQueries({ queryKey: ["preloaded-duties", companyId] });
       await queryClient.refetchQueries({ queryKey: ["duties", activeSiteId, search] });
       setEditingDuty(null);
       setHasSelectedPreloadedDuty(false);
+      setSaveAsPreloadedDuty(false);
+      setLinkedPreloadedDutyId(null);
       setReferencePhotoItems([]);
       form.reset();
-      notify({ tone: "success", title: "Duty updated", message: "The duty changes were saved successfully." });
+      const successMessage = preloadedDutyAction === "created"
+        ? "The duty was updated and added to preloaded duties."
+        : preloadedDutyAction === "updated"
+          ? "The duty and its preloaded version were updated."
+          : preloadedDutyAction === "removed"
+            ? "The duty was updated and removed from preloaded duties."
+            : "The duty changes were saved successfully.";
+      notify({ tone: "success", title: "Duty updated", message: successMessage });
     },
     onError: (error) => {
       notify({ tone: "error", title: "Could not update duty", message: error instanceof Error ? error.message : "Unknown error" });
@@ -431,6 +521,8 @@ export function DutiesPage() {
     setShowCreate(true);
     setShowPhotoModal(false);
     setHasSelectedPreloadedDuty(false);
+    setSaveAsPreloadedDuty(false);
+    setLinkedPreloadedDutyId(null);
     setReferencePhotoItems([]);
     form.reset({
       title: "",
@@ -462,9 +554,12 @@ export function DutiesPage() {
 
   function startEdit(duty: DutyItem) {
     const recurringRule = parseRecurringRule(duty.recurringRule);
+    const matchingTemplate = findMatchingPreloadedDuty(preloadedDuties, duty.title);
     setShowCreate(false);
     setShowPhotoModal(false);
     setHasSelectedPreloadedDuty(false);
+    setSaveAsPreloadedDuty(Boolean(matchingTemplate));
+    setLinkedPreloadedDutyId(matchingTemplate?.id ?? null);
     setEditingDuty(duty);
     setReferencePhotoItems(
       duty.referencePhotos.map((url) => ({
@@ -505,6 +600,8 @@ export function DutiesPage() {
     }));
 
     setHasSelectedPreloadedDuty(true);
+    setSaveAsPreloadedDuty(false);
+    setLinkedPreloadedDutyId(template.id);
     setReferencePhotoItems(photoItems);
     form.reset({
       title: template.title,
@@ -786,20 +883,46 @@ export function DutiesPage() {
               title={editingDuty ? `Edit ${editingDuty.title}` : "Create duty"}
               description="Capture the work details, deadline, and equipment required."
             />
-            <Button
-              variant="secondary"
-              disabled={createMutation.isPending || updateMutation.isPending}
-              onClick={() => {
-                setShowCreate(false);
-                setEditingDuty(null);
-                setShowPhotoModal(false);
-                setHasSelectedPreloadedDuty(false);
-                setReferencePhotoItems([]);
-                form.reset();
-              }}
-            >
-              Close
-            </Button>
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <label className="flex cursor-pointer items-center gap-2 rounded-md border border-[var(--company-border)] bg-white px-3 py-2 text-sm font-medium text-[var(--company-text)]">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={saveAsPreloadedDuty}
+                  onChange={(event) => setSaveAsPreloadedDuty(event.target.checked)}
+                  className="sr-only"
+                  disabled={createMutation.isPending || updateMutation.isPending}
+                />
+                <span
+                  aria-hidden="true"
+                  className="relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors"
+                  style={{ backgroundColor: saveAsPreloadedDuty ? "var(--company-primary)" : "#cbd5e1" } as CSSProperties}
+                >
+                  <span
+                    className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                      saveAsPreloadedDuty ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </span>
+                <span>{editingDuty ? "Preloaded duty" : "Save as preloaded"}</span>
+              </label>
+              <Button
+                variant="secondary"
+                disabled={createMutation.isPending || updateMutation.isPending}
+                onClick={() => {
+                  setShowCreate(false);
+                  setEditingDuty(null);
+                  setShowPhotoModal(false);
+                  setHasSelectedPreloadedDuty(false);
+                  setSaveAsPreloadedDuty(false);
+                  setLinkedPreloadedDutyId(null);
+                  setReferencePhotoItems([]);
+                  form.reset();
+                }}
+              >
+                Close
+              </Button>
+            </div>
           </div>
 
           <form className="grid gap-4 lg:grid-cols-2" onSubmit={form.handleSubmit(onSubmit)}>
@@ -1028,6 +1151,8 @@ export function DutiesPage() {
                   setReferencePhotoItems([]);
                   form.reset();
                   setHasSelectedPreloadedDuty(false);
+                  setSaveAsPreloadedDuty(false);
+                  setLinkedPreloadedDutyId(null);
                 }}
               >
                 Cancel
@@ -1122,7 +1247,7 @@ export function DutiesPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-lg font-semibold text-slate-950">{duty.title}</p>
-                    <p className="mt-1 text-sm text-slate-500">{duty.description || "No description"}</p>
+                    <p className="mt-1 text-sm text-slate-500">{getDutyDescriptionPreview(duty.description)}</p>
                   </div>
                   <DutyStatusBadge status={duty.status} />
                 </div>
