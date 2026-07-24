@@ -1,4 +1,5 @@
 import { supabase } from "./supabase-client";
+import { optimizeImageForUpload } from "./image-optimization-service";
 
 function fileExtension(fileName: string) {
   const match = fileName.match(/\.([a-zA-Z0-9]+)$/);
@@ -19,12 +20,14 @@ export async function uploadDutyReferencePhotos(params: {
   const uploadedUrls: string[] = [];
 
   for (const file of params.files) {
-    const fileName = `${safeSegment(params.dutyTitle || "duty")}-${crypto.randomUUID()}.${fileExtension(file.name)}`;
+    const optimizedImage = await optimizeImageForUpload(file);
+    const uploadFile = optimizedImage.file;
+    const fileName = `${safeSegment(params.dutyTitle || "duty")}-${crypto.randomUUID()}.${fileExtension(uploadFile.name)}`;
     const storagePath = `${safeSegment(params.siteId)}/${safeSegment(params.folder ?? "reference")}/${Date.now()}-${fileName}`;
-    const { error } = await supabase.storage.from(params.bucketName).upload(storagePath, file, {
+    const { error } = await supabase.storage.from(params.bucketName).upload(storagePath, uploadFile, {
       cacheControl: "3600",
       upsert: false,
-      contentType: file.type || "image/jpeg",
+      contentType: uploadFile.type || "image/jpeg",
     });
 
     if (error) {
@@ -33,6 +36,14 @@ export async function uploadDutyReferencePhotos(params: {
 
     const { data } = supabase.storage.from(params.bucketName).getPublicUrl(storagePath);
     uploadedUrls.push(data.publicUrl);
+
+    console.info("Duty photo optimized", {
+      originalBytes: optimizedImage.originalBytes,
+      optimizedBytes: optimizedImage.optimizedBytes,
+      reductionPercentage: optimizedImage.reductionPercentage,
+      originalDimensions: `${optimizedImage.originalWidth}x${optimizedImage.originalHeight}`,
+      optimizedDimensions: `${optimizedImage.optimizedWidth}x${optimizedImage.optimizedHeight}`,
+    });
   }
 
   return uploadedUrls;

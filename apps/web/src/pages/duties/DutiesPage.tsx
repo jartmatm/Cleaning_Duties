@@ -241,6 +241,7 @@ export function DutiesPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dutyListRef = useRef<HTMLDivElement | null>(null);
   const dutyFormRef = useRef<HTMLElement | null>(null);
+  const preloadedSuggestionRef = useRef<HTMLDivElement | null>(null);
   const [search, setSearch] = useState("");
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [editingDuty, setEditingDuty] = useState<DutyItem | null>(null);
@@ -250,6 +251,7 @@ export function DutiesPage() {
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [referencePhotoItems, setReferencePhotoItems] = useState<ReferencePhotoItem[]>([]);
   const [hasSelectedPreloadedDuty, setHasSelectedPreloadedDuty] = useState(false);
+  const [preloadedSuggestionsDismissed, setPreloadedSuggestionsDismissed] = useState(false);
   const [showCompletionCelebration, setShowCompletionCelebration] = useState(false);
   const [cleanerDutyFilter, setCleanerDutyFilter] = useState<CleanerDutyFilter>("Pending");
   const [managerPriorityFilter, setManagerPriorityFilter] = useState<ManagerPriorityFilter>("All");
@@ -331,6 +333,17 @@ export function DutiesPage() {
       form.setValue("recurringWeekdays", ["1"], { shouldDirty: true });
     }
   }, [form, watchedPriority, watchedRecurringPattern]);
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      if (event.target instanceof Node && !preloadedSuggestionRef.current?.contains(event.target)) {
+        setPreloadedSuggestionsDismissed(true);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
 
   const createMutation = useMutation({
     mutationFn: (values: DutyFormInput) => {
@@ -492,7 +505,7 @@ export function DutiesPage() {
   const matchingPreloadedDuties = useMemo(() => {
     const query = watchedTitle.trim().toLowerCase();
 
-    if (role === "Cleaner" || editingDuty || hasSelectedPreloadedDuty || query.length < 2) {
+    if (role === "Cleaner" || editingDuty || hasSelectedPreloadedDuty || preloadedSuggestionsDismissed || query.length < 2) {
       return [];
     }
 
@@ -502,7 +515,7 @@ export function DutiesPage() {
         return title.includes(query) || query.split(/\s+/).some((part) => part.length > 2 && title.includes(part));
       })
       .slice(0, 5);
-  }, [editingDuty, hasSelectedPreloadedDuty, preloadedDuties, role, watchedTitle]);
+  }, [editingDuty, hasSelectedPreloadedDuty, preloadedDuties, preloadedSuggestionsDismissed, role, watchedTitle]);
   const recurrencePreviewDates = useMemo(
     () => watchedPriority === "Periodical"
       ? getUpcomingOccurrences(watchedDueDate || "", watchedRecurringPattern || "daily", Number(watchedRecurringInterval) || 1, normalizeWeekdays(watchedRecurringWeekdays).length ? normalizeWeekdays(watchedRecurringWeekdays) : [1])
@@ -521,6 +534,7 @@ export function DutiesPage() {
     setShowCreate(true);
     setShowPhotoModal(false);
     setHasSelectedPreloadedDuty(false);
+    setPreloadedSuggestionsDismissed(false);
     setSaveAsPreloadedDuty(false);
     setLinkedPreloadedDutyId(null);
     setReferencePhotoItems([]);
@@ -558,6 +572,7 @@ export function DutiesPage() {
     setShowCreate(false);
     setShowPhotoModal(false);
     setHasSelectedPreloadedDuty(false);
+    setPreloadedSuggestionsDismissed(true);
     setSaveAsPreloadedDuty(Boolean(matchingTemplate));
     setLinkedPreloadedDutyId(matchingTemplate?.id ?? null);
     setEditingDuty(duty);
@@ -600,6 +615,7 @@ export function DutiesPage() {
     }));
 
     setHasSelectedPreloadedDuty(true);
+    setPreloadedSuggestionsDismissed(true);
     setSaveAsPreloadedDuty(false);
     setLinkedPreloadedDutyId(template.id);
     setReferencePhotoItems(photoItems);
@@ -928,11 +944,15 @@ export function DutiesPage() {
           <form className="grid gap-4 lg:grid-cols-2" onSubmit={form.handleSubmit(onSubmit)}>
             <div className="space-y-2 lg:col-span-2">
               <label className="text-sm font-medium">Title</label>
-              <div className="relative">
+              <div ref={preloadedSuggestionRef} className="relative">
                 <Input
                   {...form.register("title", {
-                    onChange: () => setHasSelectedPreloadedDuty(false),
+                    onChange: () => {
+                      setHasSelectedPreloadedDuty(false);
+                      setPreloadedSuggestionsDismissed(false);
+                    },
                   })}
+                  onFocus={() => setPreloadedSuggestionsDismissed(false)}
                   placeholder="Lobby deep clean"
                 />
                 {matchingPreloadedDuties.length > 0 ? (
