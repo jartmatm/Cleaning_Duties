@@ -172,7 +172,7 @@ export function ReportsPage() {
   }
 
   function downloadReportPdf(report: ServiceReportItem) {
-    const printWindow = window.open("", "_blank", "noopener,noreferrer");
+    const printWindow = window.open("about:blank", "_blank");
 
     if (!printWindow) {
       notify({ tone: "error", title: "Could not open PDF", message: "Allow pop-ups and try again." });
@@ -183,9 +183,6 @@ export function ReportsPage() {
     printWindow.document.write(buildReportPrintHtml(report));
     printWindow.document.close();
     printWindow.focus();
-    window.setTimeout(() => {
-      printWindow.print();
-    }, 500);
   }
 
   return (
@@ -410,6 +407,42 @@ function buildReportPrintHtml(report: ServiceReportItem) {
           <h2 class="section-title">Services performed</h2>
           ${dutiesHtml}
         </main>
+        <script>
+          function waitForImages() {
+            var images = Array.prototype.slice.call(document.images || []);
+
+            if (images.length === 0) {
+              return Promise.resolve();
+            }
+
+            return Promise.all(images.map(function(image) {
+              if (image.complete) {
+                return Promise.resolve();
+              }
+
+              return new Promise(function(resolve) {
+                var timeout = window.setTimeout(resolve, 4000);
+                image.addEventListener("load", function() {
+                  window.clearTimeout(timeout);
+                  resolve();
+                }, { once: true });
+                image.addEventListener("error", function() {
+                  window.clearTimeout(timeout);
+                  resolve();
+                }, { once: true });
+              });
+            }));
+          }
+
+          window.addEventListener("load", function() {
+            waitForImages().then(function() {
+              window.setTimeout(function() {
+                window.focus();
+                window.print();
+              }, 250);
+            });
+          });
+        </script>
       </body>
     </html>
   `;
