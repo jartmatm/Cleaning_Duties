@@ -10,6 +10,22 @@ function safeSegment(value: string) {
   return value.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
 
+function storagePathFromUrl(bucketName: string, photoUrl: string) {
+  try {
+    const pathSegments = new URL(photoUrl).pathname.split("/").filter(Boolean);
+    const accessSegmentIndex = pathSegments.findIndex((segment) => segment === "public" || segment === "sign");
+    const encodedBucketName = pathSegments[accessSegmentIndex + 1];
+
+    if (accessSegmentIndex < 0 || !encodedBucketName || decodeURIComponent(encodedBucketName) !== bucketName) {
+      return null;
+    }
+
+    return pathSegments.slice(accessSegmentIndex + 2).map(decodeURIComponent).join("/") || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function uploadDutyReferencePhotos(params: {
   bucketName: string;
   siteId: string;
@@ -63,6 +79,22 @@ export async function uploadDutyEvidencePhotos(params: {
     files: params.files,
     folder: params.type,
   });
+}
+
+export async function deleteDutyEvidencePhotos(params: { bucketName: string; photoUrls: string[] }) {
+  const storagePaths = params.photoUrls
+    .map((photoUrl) => storagePathFromUrl(params.bucketName, photoUrl))
+    .filter((storagePath): storagePath is string => Boolean(storagePath));
+
+  if (storagePaths.length === 0) {
+    return;
+  }
+
+  const { error } = await supabase.storage.from(params.bucketName).remove(storagePaths);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 export async function uploadDutyReferencePhoto(params: {

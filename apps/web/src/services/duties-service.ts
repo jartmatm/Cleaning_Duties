@@ -406,27 +406,14 @@ export async function updateDutyStatus(dutyId: string, status: DutyRow["status"]
   return mapDuty(data as DutyRow);
 }
 
-export async function appendDutyEvidencePhotos(params: {
+export async function replaceDutyEvidencePhotos(params: {
   dutyId: string;
-  beforePhotos?: string[];
-  afterPhotos?: string[];
+  beforePhotos: string[];
+  afterPhotos: string[];
 }) {
-  const { data: current, error: currentError } = await supabase
-    .from("cleaning_duties")
-    .select("before_photos, after_photos")
-    .eq("id", params.dutyId)
-    .single();
-
-  if (currentError) {
-    throw new Error(currentError.message);
-  }
-
-  const beforePhotos = [...((current as { before_photos: string[] | null }).before_photos ?? []), ...(params.beforePhotos ?? [])];
-  const afterPhotos = [...((current as { after_photos: string[] | null }).after_photos ?? []), ...(params.afterPhotos ?? [])];
-
   const { data, error } = await supabase
     .from("cleaning_duties")
-    .update({ before_photos: beforePhotos, after_photos: afterPhotos, updated_at: new Date().toISOString() })
+    .update({ before_photos: params.beforePhotos, after_photos: params.afterPhotos, updated_at: new Date().toISOString() })
     .eq("id", params.dutyId)
     .select("id, site_id, created_by, title, description, priority, status, due_date, recurring, recurring_rule, equipment, reference_photos, completion_photos, before_photos, after_photos, created_at, updated_at")
     .single();

@@ -6,8 +6,8 @@ import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { DutyStatusBadge } from "./duty-status-badge";
 import { notify } from "./toast";
-import { uploadDutyEvidencePhotos } from "../../services/duty-photo-service";
-import { addDutyComment, appendDutyEvidencePhotos, updateDutyStatus, type DutyItem } from "../../services/duties-service";
+import { deleteDutyEvidencePhotos, uploadDutyEvidencePhotos } from "../../services/duty-photo-service";
+import { addDutyComment, replaceDutyEvidencePhotos, updateDutyStatus, type DutyItem } from "../../services/duties-service";
 import type { SiteItem } from "../../services/sites-service";
 import { getCompanyPalette } from "../../constants/company-palettes";
 import { useSession } from "../../hooks/use-session";
@@ -34,12 +34,16 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
   const isCompletedDuty = duty.status === "Completed";
   const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
   const [afterFiles, setAfterFiles] = useState<File[]>([]);
+  const [removedBeforePhotoUrls, setRemovedBeforePhotoUrls] = useState<string[]>([]);
+  const [removedAfterPhotoUrls, setRemovedAfterPhotoUrls] = useState<string[]>([]);
   const [comment, setComment] = useState("");
   const [isEditingCompletedDuty, setIsEditingCompletedDuty] = useState(!isCompletedDuty);
   const [selectedReferencePhotoIndex, setSelectedReferencePhotoIndex] = useState<number | null>(null);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const selectedReferencePhoto = selectedReferencePhotoIndex === null ? null : duty.referencePhotos[selectedReferencePhotoIndex] ?? null;
   const isFormEditable = !isCompletedDuty || isEditingCompletedDuty;
+  const visibleBeforePhotoUrls = duty.beforePhotos.filter((photoUrl) => !removedBeforePhotoUrls.includes(photoUrl));
+  const visibleAfterPhotoUrls = duty.afterPhotos.filter((photoUrl) => !removedAfterPhotoUrls.includes(photoUrl));
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -64,8 +68,28 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
       const afterUrls = afterFiles.length
         ? await uploadDutyEvidencePhotos({ bucketName: site.storageBucket, siteId: site.id, dutyTitle: duty.title, files: afterFiles, type: "after" })
         : [];
-      if (beforeUrls.length > 0 || afterUrls.length > 0) {
-        await appendDutyEvidencePhotos({ dutyId: duty.id, beforePhotos: beforeUrls, afterPhotos: afterUrls });
+      const evidenceChanged = beforeUrls.length > 0
+        || afterUrls.length > 0
+        || removedBeforePhotoUrls.length > 0
+        || removedAfterPhotoUrls.length > 0;
+      if (evidenceChanged) {
+        await replaceDutyEvidencePhotos({
+          dutyId: duty.id,
+          beforePhotos: [...visibleBeforePhotoUrls, ...beforeUrls],
+          afterPhotos: [...visibleAfterPhotoUrls, ...afterUrls],
+        });
+      }
+      const removedPhotoUrls = [...removedBeforePhotoUrls, ...removedAfterPhotoUrls];
+      if (removedPhotoUrls.length > 0) {
+        try {
+          await deleteDutyEvidencePhotos({ bucketName: site.storageBucket, photoUrls: removedPhotoUrls });
+        } catch (error) {
+          notify({
+            tone: "error",
+            title: "Duty updated, photo cleanup failed",
+            message: error instanceof Error ? error.message : "The removed photo could not be deleted from storage.",
+          });
+        }
       }
       await addDutyComment({ dutyId: duty.id, profileId: userId, body: comment });
       return updateDutyStatus(duty.id, "Completed");
@@ -178,8 +202,24 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
         ) : null}
 
         <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <PhotoPicker label="Before photos" existingPhotoUrls={duty.beforePhotos} files={beforeFiles} onChange={setBeforeFiles} editable={isFormEditable} />
-          <PhotoPicker label="After photos" existingPhotoUrls={duty.afterPhotos} files={afterFiles} onChange={setAfterFiles} editable={isFormEditable} />
+          <PhotoPicker
+            label="Before photos"
+            existingPhotoUrls={visibleBeforePhotoUrls}
+            files={beforeFiles}
+            onChange={setBeforeFiles}
+            onRemoveExisting={(photoUrl) => setRemovedBeforePhotoUrls((current) => [...current, photoUrl])}
+            onRemoveFile={(fileIndex) => setBeforeFiles((current) => current.filter((_, index) => index !== fileIndex))}
+            editable={isFormEditable}
+          />
+          <PhotoPicker
+            label="After photos"
+            existingPhotoUrls={visibleAfterPhotoUrls}
+            files={afterFiles}
+            onChange={setAfterFiles}
+            onRemoveExisting={(photoUrl) => setRemovedAfterPhotoUrls((current) => [...current, photoUrl])}
+            onRemoveFile={(fileIndex) => setAfterFiles((current) => current.filter((_, index) => index !== fileIndex))}
+            editable={isFormEditable}
+          />
         </div>
 
         <div className="mt-5 space-y-2">
@@ -275,7 +315,15 @@ function InfoBlock(props: { label: string; value: string }) {
   );
 }
 
-function PhotoPicker(props: { label: string; existingPhotoUrls: string[]; files: File[]; onChange: (files: File[]) => void; editable: boolean }) {
+function PhotoPicker(props: {
+  label: string;
+  existingPhotoUrls: string[];
+  files: File[];
+  onChange: (files: File[]) => void;
+  onRemoveExisting: (photoUrl: string) => void;
+  onRemoveFile: (fileIndex: number) => void;
+  editable: boolean;
+}) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const previews = useMemo(
     () => props.files.map((file) => ({ file, previewUrl: URL.createObjectURL(file) })),
@@ -338,11 +386,37 @@ function PhotoPicker(props: { label: string; existingPhotoUrls: string[]; files:
             {props.existingPhotoUrls.map((photoUrl, index) => (
               <div key={`${photoUrl}-${index}`} className="relative h-10 w-10 overflow-hidden rounded-md bg-white ring-1 ring-slate-200">
                 <img src={photoUrl} alt={`Saved ${props.label.toLowerCase()} ${index + 1}`} className="h-full w-full object-cover" loading="lazy" />
+                {props.editable ? (
+                  <button
+                    type="button"
+                    onKeyDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      props.onRemoveExisting(photoUrl);
+                    }}
+                    className="absolute inset-0 flex items-center justify-center bg-slate-950/25 text-white transition hover:bg-slate-950/45"
+                    aria-label={`Remove saved ${props.label.toLowerCase()} ${index + 1}`}
+                  >
+                    <span className="rounded-full bg-slate-950/70 p-1"><X className="h-3 w-3" /></span>
+                  </button>
+                ) : null}
               </div>
             ))}
             {previews.map((preview, index) => (
               <div key={`${preview.file.name}-${preview.file.lastModified}-${index}`} className="relative h-10 w-10 overflow-hidden rounded-md bg-white ring-1 ring-slate-200">
                 <img src={preview.previewUrl} alt={`New ${props.label.toLowerCase()} ${index + 1}`} className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onKeyDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    props.onRemoveFile(index);
+                  }}
+                  className="absolute inset-0 flex items-center justify-center bg-slate-950/25 text-white transition hover:bg-slate-950/45"
+                  aria-label={`Remove new ${props.label.toLowerCase()} ${index + 1}`}
+                >
+                  <span className="rounded-full bg-slate-950/70 p-1"><X className="h-3 w-3" /></span>
+                </button>
               </div>
             ))}
           </div>
