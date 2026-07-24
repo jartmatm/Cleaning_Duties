@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type TouchEvent } from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, X } from "lucide-react";
+import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Pencil, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { DutyStatusBadge } from "./duty-status-badge";
@@ -19,12 +20,24 @@ type CleanerDutyDetailModalProps = {
 
 export function CleanerDutyDetailModal({ duty, site, userId, onClose, onCompleted }: CleanerDutyDetailModalProps) {
   const queryClient = useQueryClient();
+  const isCompletedDuty = duty.status === "Completed";
   const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
   const [afterFiles, setAfterFiles] = useState<File[]>([]);
   const [comment, setComment] = useState("");
+  const [isEditingCompletedDuty, setIsEditingCompletedDuty] = useState(!isCompletedDuty);
   const [selectedReferencePhotoIndex, setSelectedReferencePhotoIndex] = useState<number | null>(null);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const selectedReferencePhoto = selectedReferencePhotoIndex === null ? null : duty.referencePhotos[selectedReferencePhotoIndex] ?? null;
+  const isFormEditable = !isCompletedDuty || isEditingCompletedDuty;
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
 
   const completeMutation = useMutation({
     mutationFn: async () => {
@@ -49,8 +62,14 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
     onSuccess: async (completedDuty) => {
       await queryClient.invalidateQueries({ queryKey: ["cleaner-assigned-duties", userId] });
       await queryClient.invalidateQueries({ queryKey: ["duties"] });
-      notify({ tone: "success", title: "Duty completed", message: "The duty was marked as completed." });
-      onCompleted?.(completedDuty);
+      notify({
+        tone: "success",
+        title: isCompletedDuty ? "Duty updated" : "Duty completed",
+        message: isCompletedDuty ? "The completed duty changes were saved." : "The duty was marked as completed.",
+      });
+      if (!isCompletedDuty) {
+        onCompleted?.(completedDuty);
+      }
       onClose();
     },
     onError: (error) => notify({ tone: "error", title: "Could not complete duty", message: error instanceof Error ? error.message : "Unknown error" }),
@@ -97,7 +116,7 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
     showNextReferencePhoto();
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
       <Card className="max-h-[90vh] w-full max-w-3xl overflow-y-auto p-6">
         <div className="flex items-start justify-between gap-4">
@@ -148,8 +167,8 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
         ) : null}
 
         <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <PhotoPicker label="Before photos" files={beforeFiles} onChange={setBeforeFiles} />
-          <PhotoPicker label="After photos" files={afterFiles} onChange={setAfterFiles} />
+          <PhotoPicker label="Before photos" existingPhotoUrls={duty.beforePhotos} files={beforeFiles} onChange={setBeforeFiles} editable={isFormEditable} />
+          <PhotoPicker label="After photos" existingPhotoUrls={duty.afterPhotos} files={afterFiles} onChange={setAfterFiles} editable={isFormEditable} />
         </div>
 
         <div className="mt-5 space-y-2">
@@ -160,18 +179,26 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
             id="duty-completion-comment"
             value={comment}
             onChange={(event) => setComment(event.target.value)}
+            disabled={!isFormEditable}
             rows={4}
-            className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-            placeholder="Add any updates, issues, or notes about this duty."
+            className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+            placeholder={isFormEditable ? "Add any updates, issues, or notes about this duty." : "Select Edit (Completed) to add a new comment."}
           />
         </div>
 
         <div className="mt-6 flex flex-wrap justify-end gap-3">
           <Button type="button" variant="secondary" onClick={onClose} disabled={completeMutation.isPending}>Cancel</Button>
-          <Button type="button" onClick={() => completeMutation.mutate()} disabled={completeMutation.isPending || duty.status === "Completed"}>
-            {completeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            Completed
-          </Button>
+          {isCompletedDuty && !isEditingCompletedDuty ? (
+            <Button type="button" onClick={() => setIsEditingCompletedDuty(true)}>
+              <Pencil className="h-4 w-4" />
+              Edit (Completed)
+            </Button>
+          ) : (
+            <Button type="button" onClick={() => completeMutation.mutate()} disabled={completeMutation.isPending}>
+              {completeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Completed
+            </Button>
+          )}
         </div>
       </Card>
 
@@ -223,7 +250,8 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
           </div>
         </div>
       ) : null}
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -236,7 +264,7 @@ function InfoBlock(props: { label: string; value: string }) {
   );
 }
 
-function PhotoPicker(props: { label: string; files: File[]; onChange: (files: File[]) => void }) {
+function PhotoPicker(props: { label: string; existingPhotoUrls: string[]; files: File[]; onChange: (files: File[]) => void; editable: boolean }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const previews = useMemo(
     () => props.files.map((file) => ({ file, previewUrl: URL.createObjectURL(file) })),
@@ -263,29 +291,42 @@ function PhotoPicker(props: { label: string; files: File[]; onChange: (files: Fi
   return (
     <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="inline-flex min-h-11 items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-        >
-          <Camera className="h-4 w-4" />
-          {props.label}
-        </button>
-        <input ref={inputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handleChange} />
+        {props.editable ? (
+          <>
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              <Camera className="h-4 w-4" />
+              {props.label}
+            </button>
+            <input ref={inputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handleChange} />
+          </>
+        ) : (
+          <p className="text-sm font-semibold text-slate-950">{props.label}</p>
+        )}
         <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
-          {props.files.length} selected
+          {props.existingPhotoUrls.length + props.files.length} photos
         </span>
       </div>
-      <p className="mt-2 text-sm text-slate-500">Tap again to add more photos from camera or gallery.</p>
-      {previews.length > 0 ? (
+      {props.editable ? <p className="mt-2 text-sm text-slate-500">Tap again to add more photos from camera or gallery.</p> : null}
+      {props.existingPhotoUrls.length > 0 || previews.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
+          {props.existingPhotoUrls.map((photoUrl, index) => (
+            <div key={photoUrl} className="relative h-10 w-10 overflow-hidden rounded-md bg-white ring-1 ring-slate-200">
+              <img src={photoUrl} alt={`Saved ${props.label.toLowerCase()} ${index + 1}`} className="h-full w-full object-cover" loading="lazy" />
+            </div>
+          ))}
           {previews.map((preview, index) => (
-            <div key={`${preview.file.name}-${preview.file.lastModified}-${index}`} className="relative h-10 w-10 overflow-hidden rounded-lg bg-white ring-1 ring-slate-200">
-              <img src={preview.previewUrl} alt={`${props.label} ${index + 1}`} className="h-full w-full object-cover" />
+            <div key={`${preview.file.name}-${preview.file.lastModified}-${index}`} className="relative h-10 w-10 overflow-hidden rounded-md bg-white ring-1 ring-slate-200">
+              <img src={preview.previewUrl} alt={`New ${props.label.toLowerCase()} ${index + 1}`} className="h-full w-full object-cover" />
             </div>
           ))}
         </div>
-      ) : null}
+      ) : (
+        <p className="mt-3 text-sm text-slate-500">No photos uploaded.</p>
+      )}
     </div>
   );
 }
