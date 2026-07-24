@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type TouchEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent, type TouchEvent } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Pencil, X } from "lucide-react";
@@ -9,6 +9,8 @@ import { notify } from "./toast";
 import { uploadDutyEvidencePhotos } from "../../services/duty-photo-service";
 import { addDutyComment, appendDutyEvidencePhotos, updateDutyStatus, type DutyItem } from "../../services/duties-service";
 import type { SiteItem } from "../../services/sites-service";
+import { getCompanyPalette } from "../../constants/company-palettes";
+import { useSession } from "../../hooks/use-session";
 
 type CleanerDutyDetailModalProps = {
   duty: DutyItem;
@@ -20,6 +22,15 @@ type CleanerDutyDetailModalProps = {
 
 export function CleanerDutyDetailModal({ duty, site, userId, onClose, onCompleted }: CleanerDutyDetailModalProps) {
   const queryClient = useQueryClient();
+  const { companyPalette } = useSession();
+  const palette = getCompanyPalette(companyPalette);
+  const modalThemeStyle = {
+    "--company-primary": palette.primary,
+    "--company-accent": palette.accent,
+    "--company-surface": palette.surface,
+    "--company-text": palette.text,
+    "--company-border": `color-mix(in srgb, ${palette.accent} 28%, white)`,
+  } as CSSProperties;
   const isCompletedDuty = duty.status === "Completed";
   const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
   const [afterFiles, setAfterFiles] = useState<File[]>([]);
@@ -117,7 +128,7 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" style={modalThemeStyle}>
       <Card className="max-h-[90vh] w-full max-w-3xl overflow-y-auto p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -182,7 +193,7 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
             disabled={!isFormEditable}
             rows={4}
             className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
-            placeholder={isFormEditable ? "Add any updates, issues, or notes about this duty." : "Select Edit (Completed) to add a new comment."}
+            placeholder={isFormEditable ? "Add any updates, issues, or notes about this duty." : "Select Edit to add a new comment."}
           />
         </div>
 
@@ -191,7 +202,7 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
           {isCompletedDuty && !isEditingCompletedDuty ? (
             <Button type="button" onClick={() => setIsEditingCompletedDuty(true)}>
               <Pencil className="h-4 w-4" />
-              Edit (Completed)
+              Edit
             </Button>
           ) : (
             <Button type="button" onClick={() => completeMutation.mutate()} disabled={completeMutation.isPending}>
@@ -288,45 +299,57 @@ function PhotoPicker(props: { label: string; existingPhotoUrls: string[]; files:
     props.onChange([...props.files, ...selectedFiles]);
   }
 
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    inputRef.current?.click();
+  }
+
   return (
-    <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {props.editable ? (
-          <>
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-            >
-              <Camera className="h-4 w-4" />
-              {props.label}
-            </button>
-            <input ref={inputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handleChange} />
-          </>
-        ) : (
-          <p className="text-sm font-semibold text-slate-950">{props.label}</p>
-        )}
-        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
-          {props.existingPhotoUrls.length + props.files.length} photos
-        </span>
-      </div>
-      {props.editable ? <p className="mt-2 text-sm text-slate-500">Tap again to add more photos from camera or gallery.</p> : null}
-      {props.existingPhotoUrls.length > 0 || previews.length > 0 ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {props.existingPhotoUrls.map((photoUrl, index) => (
-            <div key={photoUrl} className="relative h-10 w-10 overflow-hidden rounded-md bg-white ring-1 ring-slate-200">
-              <img src={photoUrl} alt={`Saved ${props.label.toLowerCase()} ${index + 1}`} className="h-full w-full object-cover" loading="lazy" />
-            </div>
-          ))}
-          {previews.map((preview, index) => (
-            <div key={`${preview.file.name}-${preview.file.lastModified}-${index}`} className="relative h-10 w-10 overflow-hidden rounded-md bg-white ring-1 ring-slate-200">
-              <img src={preview.previewUrl} alt={`New ${props.label.toLowerCase()} ${index + 1}`} className="h-full w-full object-cover" />
-            </div>
-          ))}
+    <>
+      {props.editable ? (
+        <input ref={inputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handleChange} />
+      ) : null}
+      <div
+        role={props.editable ? "button" : undefined}
+        tabIndex={props.editable ? 0 : undefined}
+        onClick={props.editable ? () => inputRef.current?.click() : undefined}
+        onKeyDown={props.editable ? handleKeyDown : undefined}
+        className={`rounded-md border border-dashed border-slate-300 bg-slate-50 p-4 transition ${
+          props.editable ? "cursor-pointer hover:border-slate-400 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-300" : ""
+        }`}
+        aria-label={props.editable ? `Add ${props.label.toLowerCase()}` : undefined}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="inline-flex items-center gap-2 text-sm font-semibold text-slate-950">
+            {props.editable ? <Camera className="h-4 w-4" /> : null}
+            {props.label}
+          </p>
+          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+            {props.existingPhotoUrls.length + props.files.length} photos
+          </span>
         </div>
-      ) : (
-        <p className="mt-3 text-sm text-slate-500">No photos uploaded.</p>
-      )}
-    </div>
+        {props.editable ? <p className="mt-2 text-sm text-slate-500">Tap again to add more photos from camera or gallery.</p> : null}
+        {props.existingPhotoUrls.length > 0 || previews.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {props.existingPhotoUrls.map((photoUrl, index) => (
+              <div key={`${photoUrl}-${index}`} className="relative h-10 w-10 overflow-hidden rounded-md bg-white ring-1 ring-slate-200">
+                <img src={photoUrl} alt={`Saved ${props.label.toLowerCase()} ${index + 1}`} className="h-full w-full object-cover" loading="lazy" />
+              </div>
+            ))}
+            {previews.map((preview, index) => (
+              <div key={`${preview.file.name}-${preview.file.lastModified}-${index}`} className="relative h-10 w-10 overflow-hidden rounded-md bg-white ring-1 ring-slate-200">
+                <img src={preview.previewUrl} alt={`New ${props.label.toLowerCase()} ${index + 1}`} className="h-full w-full object-cover" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-slate-500">No photos uploaded.</p>
+        )}
+      </div>
+    </>
   );
 }
