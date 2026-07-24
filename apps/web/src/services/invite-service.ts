@@ -1,0 +1,52 @@
+import { supabase } from "./supabase-client";
+
+type InviteCleanerInput = {
+  fullName: string;
+  email: string;
+  password: string;
+  companyId: string;
+  siteIds: string[];
+};
+
+async function functionErrorMessage(error: unknown) {
+  if (error && typeof error === "object" && "context" in error && (error as { context?: unknown }).context instanceof Response) {
+    const response = (error as { context: Response }).context;
+    try {
+      const body = await response.clone().json() as { error?: unknown; message?: unknown };
+      const message = body.error ?? body.message;
+      if (typeof message === "string" && message.trim()) {
+        return message;
+      }
+    } catch {
+      const message = await response.clone().text();
+      if (message.trim()) {
+        return message;
+      }
+    }
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return "The cleaner account could not be created.";
+}
+
+export async function inviteCleaner(input: InviteCleanerInput) {
+  const { data, error } = await supabase.functions.invoke("invite-user", {
+    body: {
+      full_name: input.fullName,
+      email: input.email,
+      password: input.password,
+      role: "Cleaner",
+      company_id: input.companyId,
+      site_ids: input.siteIds,
+    },
+  });
+
+  if (error) {
+    throw new Error(await functionErrorMessage(error));
+  }
+
+  return data as { userId: string };
+}

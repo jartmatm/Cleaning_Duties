@@ -11,7 +11,7 @@ import { Card } from "../../components/ui/card";
 import { PageHeader } from "../../components/common/page-header";
 import { SectionTitle } from "../../components/common/section-title";
 import { notify } from "../../components/common/toast";
-import { apiUrl } from "../../services/api-client";
+import { inviteCleaner } from "../../services/invite-service";
 import { listSites, type SiteItem } from "../../services/sites-service";
 import { listCompanyUsers } from "../../services/users-service";
 
@@ -23,42 +23,6 @@ const inviteCleanerSchema = z.object({
 });
 
 type InviteCleanerInput = z.infer<typeof inviteCleanerSchema>;
-
-function stringifyUnknown(value: unknown) {
-  if (typeof value === "string") {
-    return value;
-  }
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function getInviteErrorMessage(body: unknown, response: Response) {
-  if (!body || typeof body !== "object") {
-    return `Invite failed (${response.status}) at ${response.url}`;
-  }
-
-  const error = (body as { error?: unknown }).error;
-  if (typeof error === "string" && error.trim()) {
-    return error;
-  }
-  if (error && typeof error === "object") {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === "string" && message.trim()) {
-      return message;
-    }
-    return `Invite failed (${response.status}) at ${response.url}: ${stringifyUnknown(error)}`;
-  }
-
-  const message = (body as { message?: unknown }).message;
-  if (typeof message === "string" && message.trim()) {
-    return message;
-  }
-
-  return `Invite failed (${response.status}) at ${response.url}: ${stringifyUnknown(body)}`;
-}
 
 export function UsersPage() {
   const queryClient = useQueryClient();
@@ -113,24 +77,17 @@ export function UsersPage() {
 
   async function onSubmit(values: InviteCleanerInput) {
     try {
-      const response = await fetch(apiUrl("/invite"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          full_name: values.fullName,
-          email: values.email,
-          password: values.password,
-          role: "Cleaner",
-          company_id: companyId,
-          site_ids: values.siteIds,
-        }),
-      });
-
-      const contentType = response.headers.get("content-type") ?? "";
-      const body = contentType.includes("application/json") ? await response.json() : { error: await response.text() };
-      if (!response.ok) {
-        throw new Error(getInviteErrorMessage(body, response));
+      if (!companyId) {
+        throw new Error("No company is selected for this invitation.");
       }
+
+      await inviteCleaner({
+        fullName: values.fullName,
+        email: values.email,
+        password: values.password,
+        companyId,
+        siteIds: values.siteIds,
+      });
 
       notify({
         tone: "success",
@@ -142,16 +99,10 @@ export function UsersPage() {
       setIsInviteOpen(false);
       form.reset();
     } catch (error) {
-      const message =
-        error instanceof TypeError
-          ? `Could not connect to the API at ${apiUrl("/invite")}. Make sure apps/api is running.`
-          : error instanceof Error
-            ? error.message
-            : stringifyUnknown(error);
       notify({
         tone: "error",
         title: "Invite failed",
-        message,
+        message: error instanceof Error ? error.message : "The cleaner account could not be created.",
       });
     }
   }
