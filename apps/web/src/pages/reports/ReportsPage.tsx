@@ -10,6 +10,7 @@ import { SectionTitle } from "../../components/common/section-title";
 import { notify } from "../../components/common/toast";
 import { useSession } from "../../hooks/use-session";
 import { getCompanySettings } from "../../services/company-service";
+import { listAssignableMembers } from "../../services/assignments-service";
 import { listDuties, type DutyItem } from "../../services/duties-service";
 import { getCurrentProfile } from "../../services/profile-service";
 import { createServiceReport, deleteServiceReport, listServiceReports, type ServiceReportItem, type ServiceReportSnapshot } from "../../services/reports-service";
@@ -53,6 +54,14 @@ function dutyMatchesRange(duty: DutyItem, range: DateRange) {
 
 function isCompletedReportDuty(duty: { status: string }) {
   return duty.status === "Completed" || duty.status === "Archived";
+}
+
+function cleanerAssignmentText(assignedCleanerNames: string[] | undefined) {
+  if (!assignedCleanerNames) {
+    return "Not recorded";
+  }
+
+  return assignedCleanerNames.length > 0 ? assignedCleanerNames.join(", ") : "Unassigned";
 }
 
 function mediaFromDuties(duties: DutyItem[]) {
@@ -192,6 +201,12 @@ export function ReportsPage() {
 
       const rangedDuties = duties.filter((duty) => dutyMatchesRange(duty, range));
       const reportDuties = rangedDuties.filter(isCompletedReportDuty);
+      const siteMembers = activeSite ? await listAssignableMembers(activeSite.id) : [];
+      const cleanerNamesById = new Map(
+        siteMembers
+          .filter((member) => member.role === "Cleaner")
+          .map((member) => [member.id, member.name]),
+      );
       const snapshot: ServiceReportSnapshot = {
         companyName: company.name,
         companyLogoUrl: company.logoUrl,
@@ -206,6 +221,10 @@ export function ReportsPage() {
           id: duty.id,
           title: duty.title,
           description: duty.description,
+          assignedCleanerNames: duty.assignedUserIds.flatMap((profileId) => {
+            const cleanerName = cleanerNamesById.get(profileId);
+            return cleanerName ? [cleanerName] : [];
+          }),
           status: duty.status,
           dueDate: duty.dueDate,
           beforePhotos: duty.beforePhotos,
@@ -462,6 +481,8 @@ function buildReportPrintHtml(report: ServiceReportItem) {
 
       return `
         <section class="duty">
+          <h3>${escapeHtml(duty.title)}</h3>
+          <p class="cleaners"><strong>Cleaners:</strong> ${escapeHtml(cleanerAssignmentText(duty.assignedCleanerNames))}</p>
           ${duty.description ? `<p class="description">${escapeHtml(duty.description)}</p>` : ""}
           ${duty.beforePhotos.length || duty.afterPhotos.length ? `
             <div class="photo-grid">
@@ -496,7 +517,9 @@ function buildReportPrintHtml(report: ServiceReportItem) {
           .row span { text-align: right; color: #475569; }
           .section-title { margin-top: 56px; font-size: 28px; }
           .duty { break-inside: avoid; margin-top: 24px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; }
-          .description { margin: 0; color: #475569; }
+          .duty h3 { margin: 0; font-size: 20px; }
+          .cleaners { margin: 8px 0 0; color: #64748b; font-size: 14px; }
+          .description { margin: 12px 0 0; color: #475569; }
           .photo-grid { display: grid; grid-template-columns: 1fr; gap: 24px; margin-top: 18px; }
           .photo-title { margin: 0 0 8px; color: #475569; font-size: 13px; font-weight: 800; }
           .photos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
@@ -665,7 +688,11 @@ function ReportPreview({ report }: { report: ServiceReportItem | null }) {
             ) : (
               completedDuties.map((duty) => (
                 <div key={duty.id} className="rounded-md border border-slate-200 p-5">
-                  {duty.description ? <p className="text-slate-600">{duty.description}</p> : null}
+                  <p className="text-lg font-bold text-slate-950">{duty.title}</p>
+                  <p className="mt-2 text-sm text-slate-500">
+                    <span className="font-semibold text-slate-700">Cleaners:</span> {cleanerAssignmentText(duty.assignedCleanerNames)}
+                  </p>
+                  {duty.description ? <p className="mt-3 text-slate-600">{duty.description}</p> : null}
                   {duty.beforePhotos.length || duty.afterPhotos.length ? (
                     <div className="mt-4 space-y-6">
                       <PhotoStrip title="Before" photos={duty.beforePhotos} />
