@@ -1,6 +1,7 @@
 import { Download, FileText, Loader2, Plus, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { zipSync } from "fflate";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { ConfirmationDialog } from "../../components/common/confirmation-dialog";
@@ -24,6 +25,11 @@ type MediaItem = {
   dutyTitle: string;
   type: "Before" | "After";
   url: string;
+};
+
+type PreparedMediaFile = {
+  id: string;
+  file: File;
 };
 
 function todayValue() {
@@ -56,6 +62,50 @@ function mediaFromDuties(duties: DutyItem[]) {
   ]);
 }
 
+function safeFileName(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase()
+    .slice(0, 80) || "duty";
+}
+
+function imageExtension(blob: Blob, url: string) {
+  const extensionsByMimeType: Record<string, string> = {
+    "image/gif": "gif",
+    "image/heic": "heic",
+    "image/heif": "heif",
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+  };
+
+  if (extensionsByMimeType[blob.type]) {
+    return extensionsByMimeType[blob.type];
+  }
+
+  const pathExtension = new URL(url).pathname.match(/\.([a-z0-9]{2,5})$/i)?.[1];
+  return pathExtension?.toLowerCase() || "jpg";
+}
+
+async function prepareMediaFile(item: MediaItem, index: number, signal: AbortSignal) {
+  const response = await fetch(item.url, { signal });
+
+  if (!response.ok) {
+    throw new Error(`Could not load ${item.type.toLowerCase()} photo for ${item.dutyTitle}.`);
+  }
+
+  const blob = await response.blob();
+  const sequence = String(index + 1).padStart(3, "0");
+  const fileName = `${sequence}-${item.type.toLowerCase()}-${safeFileName(item.dutyTitle)}.${imageExtension(blob, item.url)}`;
+  return new File([blob], fileName, { type: blob.type || "image/jpeg" });
+}
+
+function isMobileDevice() {
+  return window.matchMedia("(pointer: coarse)").matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 export function ReportsPage() {
   const queryClient = useQueryClient();
   const { companyId, userId, activeSiteId } = useSession();
@@ -66,6 +116,10 @@ export function ReportsPage() {
   const [range, setRange] = useState<DateRange>({ dateFrom: todayValue(), dateTo: todayValue() });
   const [mediaRange, setMediaRange] = useState<DateRange>({ dateFrom: todayValue(), dateTo: todayValue() });
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
+  const [preparedMediaFiles, setPreparedMediaFiles] = useState<PreparedMediaFile[]>([]);
+  const [isPreparingMedia, setIsPreparingMedia] = useState(false);
+  const [isDownloadingMedia, setIsDownloadingMedia] = useState(false);
+  const [mediaPreparationError, setMediaPreparationError] = useState<string | null>(null);
 
   const { data: company } = useQuery({
     queryKey: ["company-settings", companyId],
@@ -95,6 +149,40 @@ export function ReportsPage() {
   });
 
   const mediaItems = useMemo(() => mediaFromDuties(duties.filter((duty) => dutyMatchesRange(duty, mediaRange))), [duties, mediaRange]);
+
+  useEffect(() => {
+    if (!isMediaOpen || mediaItems.length === 0) {
+      setPreparedMediaFiles([]);
+      setIsPreparingMedia(false);
+      setMediaPreparationError(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    setPreparedMediaFiles([]);
+    setIsPreparingMedia(true);
+    setMediaPreparationError(null);
+
+    Promise.all(mediaItems.map(async (item, index) => ({
+      id: item.id,
+      file: await prepareMediaFile(item, index, controller.signal),
+    })))
+      .then((files) => setPreparedMediaFiles(files))
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setMediaPreparationError(error instanceof Error ? error.message : "Could not prepare the selected photos.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsPreparingMedia(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [isMediaOpen, mediaItems]);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -161,19 +249,53 @@ export function ReportsPage() {
     setIsMediaOpen(true);
   }
 
-  function downloadSelectedMedia() {
-    const selectedItems = mediaItems.filter((item) => selectedMediaIds.includes(item.id));
-    selectedItems.forEach((item, index) => {
-      window.setTimeout(() => {
-        const link = document.createElement("a");
-        link.href = item.url;
-        link.download = `${item.type.toLowerCase()}-${item.dutyTitle.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${index + 1}`;
-        link.target = "_blank";
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-      }, index * 150);
-    });
+  async function downloadSelectedMedia() {
+    const selectedFiles = preparedMediaFiles
+      .filter((item) => selectedMediaIds.includes(item.id))
+      .map((item) => item.file);
+
+    if (selectedFiles.length !== selectedMediaIds.length) {
+      notify({ tone: "error", title: "Photos not ready", message: mediaPreparationError ?? "Wait for the selected photos to finish preparing." });
+      return;
+    }
+
+    setIsDownloadingMedia(true);
+
+    try {
+      if (isMobileDevice() && navigator.share && navigator.canShare?.({ files: selectedFiles })) {
+        await navigator.share({ files: selectedFiles, title: "Cleaning Duties photos" });
+        setIsMediaOpen(false);
+        notify({ tone: "success", title: "Photos ready", message: "The selected photos were sent to your device." });
+        return;
+      }
+
+      const archiveEntries: Record<string, Uint8Array> = {};
+      const fileContents = await Promise.all(selectedFiles.map((file) => file.arrayBuffer()));
+      selectedFiles.forEach((file, index) => {
+        archiveEntries[file.name] = new Uint8Array(fileContents[index]!);
+      });
+
+      const archive = zipSync(archiveEntries, { level: 0 });
+      const archiveBlob = new Blob([archive], { type: "application/zip" });
+      const archiveUrl = URL.createObjectURL(archiveBlob);
+      const link = document.createElement("a");
+      link.href = archiveUrl;
+      link.download = `cleaning-duty-photos-${mediaRange.dateFrom}-to-${mediaRange.dateTo}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(archiveUrl), 1000);
+      setIsMediaOpen(false);
+      notify({ tone: "success", title: "Download ready", message: `${selectedFiles.length} photos were saved in one ZIP file.` });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+
+      notify({ tone: "error", title: "Could not save photos", message: error instanceof Error ? error.message : "Unknown error" });
+    } finally {
+      setIsDownloadingMedia(false);
+    }
   }
 
   function downloadReportPdf(report: ServiceReportItem) {
@@ -283,6 +405,9 @@ export function ReportsPage() {
           }}
           items={mediaItems}
           selectedIds={selectedMediaIds}
+          isPreparing={isPreparingMedia}
+          isDownloading={isDownloadingMedia}
+          preparationError={mediaPreparationError}
           onToggle={(id) => setSelectedMediaIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])}
           onCancel={() => setIsMediaOpen(false)}
           onDownload={downloadSelectedMedia}
@@ -587,10 +712,13 @@ function MediaDialog(props: {
   range: DateRange;
   items: MediaItem[];
   selectedIds: string[];
+  isPreparing: boolean;
+  isDownloading: boolean;
+  preparationError: string | null;
   onRangeChange: (range: DateRange) => void;
   onToggle: (id: string) => void;
   onCancel: () => void;
-  onDownload: () => void;
+  onDownload: () => Promise<void>;
 }) {
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
@@ -626,11 +754,12 @@ function MediaDialog(props: {
             })}
           </div>
         )}
+        {props.preparationError ? <p className="text-sm font-medium text-red-600">{props.preparationError}</p> : null}
         <div className="flex justify-end gap-3">
-          <Button type="button" variant="secondary" onClick={props.onCancel}>Cancel</Button>
-          <Button type="button" onClick={props.onDownload} disabled={props.selectedIds.length === 0}>
-            <Download className="h-4 w-4" />
-            Download
+          <Button type="button" variant="secondary" onClick={props.onCancel} disabled={props.isDownloading}>Cancel</Button>
+          <Button type="button" onClick={() => void props.onDownload()} disabled={props.selectedIds.length === 0 || props.isPreparing || props.isDownloading || Boolean(props.preparationError)}>
+            {props.isPreparing || props.isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {props.isPreparing ? "Preparing..." : props.isDownloading ? "Saving..." : "Download"}
           </Button>
         </div>
       </Card>
