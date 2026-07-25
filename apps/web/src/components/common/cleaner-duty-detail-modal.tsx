@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent, type TouchEvent } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Images, Loader2, Pencil, X } from "lucide-react";
+import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Pencil, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { DutyStatusBadge } from "./duty-status-badge";
@@ -324,9 +324,7 @@ function PhotoPicker(props: {
   onRemoveFile: (fileIndex: number) => void;
   editable: boolean;
 }) {
-  const cameraInputRef = useRef<HTMLInputElement | null>(null);
-  const galleryInputRef = useRef<HTMLInputElement | null>(null);
-  const [isSourcePickerOpen, setIsSourcePickerOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const previews = useMemo(
     () => props.files.map((file) => ({ file, previewUrl: URL.createObjectURL(file) })),
     [props.files],
@@ -355,21 +353,18 @@ function PhotoPicker(props: {
     }
 
     event.preventDefault();
-    setIsSourcePickerOpen(true);
+    inputRef.current?.click();
   }
 
   return (
     <>
       {props.editable ? (
-        <>
-          <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleChange} />
-          <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleChange} />
-        </>
+        <input ref={inputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleChange} />
       ) : null}
       <div
         role={props.editable ? "button" : undefined}
         tabIndex={props.editable ? 0 : undefined}
-        onClick={props.editable ? () => setIsSourcePickerOpen(true) : undefined}
+        onClick={props.editable ? () => inputRef.current?.click() : undefined}
         onKeyDown={props.editable ? handleKeyDown : undefined}
         className={`rounded-md border border-dashed border-slate-300 bg-slate-50 p-4 transition ${
           props.editable ? "cursor-pointer hover:border-slate-400 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-300" : ""
@@ -430,58 +425,6 @@ function PhotoPicker(props: {
         )}
       </div>
 
-      {isSourcePickerOpen ? (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
-          onClick={() => setIsSourcePickerOpen(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Choose photo source"
-        >
-          <Card className="w-full max-w-sm space-y-5 p-5" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-lg font-semibold text-slate-950">Add photos</p>
-                <p className="mt-1 text-sm text-slate-500">Choose a photo source.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsSourcePickerOpen(false)}
-                className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                aria-label="Close photo source picker"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Button
-                type="button"
-                onClick={() => {
-                  setIsSourcePickerOpen(false);
-                  cameraInputRef.current?.click();
-                }}
-              >
-                <Camera className="h-4 w-4" />
-                Camera
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setIsSourcePickerOpen(false);
-                  galleryInputRef.current?.click();
-                }}
-              >
-                <Images className="h-4 w-4" />
-                Gallery
-              </Button>
-            </div>
-            <Button type="button" variant="ghost" className="w-full" onClick={() => setIsSourcePickerOpen(false)}>
-              Cancel
-            </Button>
-          </Card>
-        </div>
-      ) : null}
     </>
   );
 }
