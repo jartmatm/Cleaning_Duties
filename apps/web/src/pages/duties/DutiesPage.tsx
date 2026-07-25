@@ -300,6 +300,7 @@ export function DutiesPage() {
       description: "",
       priority: "Medium",
       status: "Draft",
+      startDate: "",
       dueDate: "",
       recurringPattern: "daily",
       recurringInterval: 1,
@@ -312,6 +313,7 @@ export function DutiesPage() {
   });
   const watchedTitle = form.watch("title");
   const watchedPriority = form.watch("priority");
+  const watchedStartDate = form.watch("startDate");
   const watchedDueDate = form.watch("dueDate");
   const watchedRecurringPattern = form.watch("recurringPattern");
   const watchedRecurringInterval = form.watch("recurringInterval");
@@ -543,6 +545,7 @@ export function DutiesPage() {
       description: "",
       priority: "Medium",
       status: "Draft",
+      startDate: "",
       dueDate: "",
       recurringPattern: "daily",
       recurringInterval: 1,
@@ -590,6 +593,7 @@ export function DutiesPage() {
       description: duty.description,
       priority: duty.priority,
       status: duty.status,
+      startDate: toDateTimeLocalValue(duty.startsAt),
       dueDate: toDateTimeLocalValue(duty.dueDate),
       recurringPattern: recurringRule.pattern,
       recurringInterval: recurringRule.interval,
@@ -624,6 +628,7 @@ export function DutiesPage() {
       description: template.description,
       priority: template.priority,
       status: template.status,
+      startDate: "",
       dueDate: "",
       recurringPattern: "daily",
       recurringInterval: 1,
@@ -718,6 +723,16 @@ export function DutiesPage() {
 
     if (values.priority === "Periodical" && values.recurringPattern === "weekly" && normalizeWeekdays(values.recurringWeekdays).length === 0) {
       notify({ tone: "error", title: "Select weekdays", message: "Choose at least one weekday for weekly duties." });
+      return;
+    }
+
+    if (values.priority === "Periodical" && (!values.startDate || !values.dueDate)) {
+      notify({ tone: "error", title: "Set the shift window", message: "Periodical duties need both a shift start and shift end." });
+      return;
+    }
+
+    if (values.startDate && values.dueDate && new Date(values.startDate) >= new Date(values.dueDate)) {
+      notify({ tone: "error", title: "Invalid shift window", message: "Shift end must be later than shift start." });
       return;
     }
 
@@ -1007,8 +1022,12 @@ export function DutiesPage() {
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Due date</label>
-              <Input type="datetime-local" {...form.register("dueDate")} />
+              <label className="text-sm font-medium">Shift start</label>
+              <Input type="datetime-local" {...form.register("startDate")} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Shift end (due date)</label>
+              <Input type="datetime-local" min={watchedStartDate || undefined} {...form.register("dueDate")} />
             </div>
             {watchedPriority === "Periodical" ? (
               <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:col-span-2">
@@ -1052,7 +1071,7 @@ export function DutiesPage() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-500">Select a due date to preview the upcoming dates.</p>
+                  <p className="text-sm text-slate-500">Select the shift end to preview the upcoming dates.</p>
                 )}
               </div>
             ) : null}
@@ -1273,7 +1292,12 @@ export function DutiesPage() {
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs font-medium text-slate-600">
                   <span className="rounded-full bg-slate-50 px-3 py-1 ring-1 ring-slate-200">{duty.priority}</span>
-                  <span className="rounded-full bg-slate-50 px-3 py-1 ring-1 ring-slate-200">{duty.dueDate ? new Date(duty.dueDate).toLocaleString() : "No due date"}</span>
+                  <span className="rounded-full bg-slate-50 px-3 py-1 ring-1 ring-slate-200">
+                    {duty.startsAt ? `Starts ${new Date(duty.startsAt).toLocaleString()}` : "No shift start"}
+                  </span>
+                  <span className="rounded-full bg-slate-50 px-3 py-1 ring-1 ring-slate-200">
+                    {duty.dueDate ? `Ends ${new Date(duty.dueDate).toLocaleString()}` : "No shift end"}
+                  </span>
                 </div>
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div className="flex flex-wrap gap-2">

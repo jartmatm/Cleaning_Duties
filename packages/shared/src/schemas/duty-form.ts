@@ -17,6 +17,7 @@ export const dutyFormSchema = z.object({
   description: z.string().max(5000).optional().default(""),
   priority: z.enum(DUTY_PRIORITIES),
   status: z.enum(DUTY_STATUSES),
+  startDate: z.string().optional().default(""),
   dueDate: z.string().optional().default(""),
   recurringPattern: z.string().optional().default("daily"),
   recurringInterval: z.coerce.number().int().min(1).max(365).optional().default(1),

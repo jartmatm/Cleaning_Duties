@@ -40,7 +40,7 @@ const managerFilterTitles: Record<ManagerDashboardFilter, string> = {
 
 const managerFilterDescriptions: Record<ManagerDashboardFilter, string> = {
   pending: "Open work across the active site.",
-  completed: "Completed work across the active site.",
+  completed: "Work completed today across the active site.",
   overdue: "Duties that need manager review.",
   incidents: "Open incidents reported this week.",
 };
@@ -50,7 +50,7 @@ function isPendingDuty(duty: DutyItem) {
 }
 
 function isActiveDuty(duty: DutyItem) {
-  return duty.status !== "Completed" && duty.status !== "Archived" && duty.status !== "Missed";
+  return !["Completed", "Archived", "Missed", "Incomplete"].includes(duty.status);
 }
 
 function isCleanerActiveDuty(duty: DutyItem) {
@@ -73,6 +73,23 @@ function isThisWeek(dateValue: string | null) {
   weekStart.setDate(now.getDate() - now.getDay());
 
   return date >= weekStart && date <= now;
+}
+
+function isToday(dateValue: string | null) {
+  if (!dateValue) {
+    return false;
+  }
+
+  const date = new Date(dateValue);
+  const now = new Date();
+  return !Number.isNaN(date.getTime())
+    && date.getFullYear() === now.getFullYear()
+    && date.getMonth() === now.getMonth()
+    && date.getDate() === now.getDate();
+}
+
+function isInTodaysShiftWindow(duty: DutyItem) {
+  return isToday(duty.startsAt) || isToday(duty.dueDate);
 }
 
 function percent(value: number, total: number) {
@@ -115,10 +132,10 @@ function ManagerDashboard() {
   });
 
   const weeklyReportData = useMemo(() => {
-    const weeklyDuties = duties.filter((duty) => isThisWeek(duty.createdAt) || isThisWeek(duty.dueDate));
+    const weeklyDuties = duties.filter((duty) => isThisWeek(duty.startsAt) || isThisWeek(duty.dueDate) || isThisWeek(duty.completedAt));
     const reportDuties = weeklyDuties.length > 0 ? weeklyDuties : duties;
-    const completedDuties = reportDuties.filter((duty) => duty.status === "Completed");
-    const onTimeDuties = completedDuties.filter((duty) => !duty.dueDate || new Date(duty.updatedAt) <= new Date(duty.dueDate));
+    const completedDuties = reportDuties.filter((duty) => duty.status === "Completed" || duty.status === "Archived");
+    const onTimeDuties = completedDuties.filter((duty) => !duty.dueDate || (duty.completedAt && new Date(duty.completedAt) <= new Date(duty.dueDate)));
     const activeDuties = reportDuties.filter(isActiveDuty);
     const weeklyIncidents = incidents.filter((incident) => isThisWeek(incident.createdAt));
     const openIncidents = weeklyIncidents.filter((incident) => !incident.resolvedAt);
@@ -131,7 +148,8 @@ function ManagerDashboard() {
     ];
   }, [duties, incidents]);
   const pendingDuties = duties.filter(isActiveDuty);
-  const completedDuties = duties.filter((duty) => duty.status === "Completed");
+  const completedDuties = duties.filter((duty) => (duty.status === "Completed" || duty.status === "Archived") && isToday(duty.completedAt));
+  const todayDuties = duties.filter(isInTodaysShiftWindow);
   const overdueDuties = duties.filter((duty) => duty.status === "Overdue");
   const openWeeklyIncidents = incidents.filter((incident) => isThisWeek(incident.createdAt) && !incident.resolvedAt);
   const displayedDuties = useMemo(() => {
@@ -145,8 +163,8 @@ function ManagerDashboard() {
       return overdueDuties;
     }
 
-    return duties.slice(0, 3);
-  }, [activeFilter, completedDuties, duties, overdueDuties, pendingDuties]);
+    return todayDuties.slice(0, 3);
+  }, [activeFilter, completedDuties, overdueDuties, pendingDuties, todayDuties]);
   const panelTitle = activeFilter ? managerFilterTitles[activeFilter] : "Today's duties";
   const panelDescription = activeFilter ? managerFilterDescriptions[activeFilter] : "The highest priority work across the active site.";
 
@@ -209,7 +227,10 @@ function ManagerDashboard() {
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
                       <span>{item.priority}</span>
                       <span aria-hidden="true">·</span>
-                      <span>{item.dueDate ? new Date(item.dueDate).toLocaleString() : "No due date"}</span>
+                      <span>
+                        {item.startsAt ? new Date(item.startsAt).toLocaleString() : "No shift start"}
+                        {item.dueDate ? ` - ${new Date(item.dueDate).toLocaleString()}` : ""}
+                      </span>
                       <DutyStatusBadge status={item.status} />
                     </div>
                   </div>

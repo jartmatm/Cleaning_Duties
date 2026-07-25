@@ -67,7 +67,9 @@ function formatReportRange(snapshot: Pick<ServiceReportSnapshot, "dateFrom" | "d
 }
 
 function dutyMatchesRange(duty: DutyItem, range: DateRange) {
-  return isInRange(duty.dueDate, range) || isInRange(duty.updatedAt, range) || isInRange(duty.createdAt, range);
+  return isCompletedReportDuty(duty)
+    && duty.beforePhotos.length + duty.afterPhotos.length > 0
+    && isInRange(duty.completedAt, range);
 }
 
 function isCompletedReportDuty(duty: { status: string }) {
@@ -230,8 +232,7 @@ export function ReportsPage() {
         throw new Error("Choose a valid report start and end time.");
       }
 
-      const rangedDuties = duties.filter((duty) => dutyMatchesRange(duty, range));
-      const reportDuties = rangedDuties.filter(isCompletedReportDuty);
+      const reportDuties = duties.filter((duty) => dutyMatchesRange(duty, range));
       const siteMembers = activeSite ? await listAssignableMembers(activeSite.id) : [];
       const cleanerNamesById = new Map(
         siteMembers
@@ -249,7 +250,7 @@ export function ReportsPage() {
         timeTo: range.timeTo,
         generatedAt: new Date().toISOString(),
         completedCount: reportDuties.length,
-        totalCount: rangedDuties.length,
+        totalCount: reportDuties.length,
         duties: reportDuties.map((duty) => ({
           id: duty.id,
           title: duty.title,
@@ -260,6 +261,7 @@ export function ReportsPage() {
           }),
           status: duty.status,
           dueDate: duty.dueDate,
+          completedAt: duty.completedAt,
           beforePhotos: duty.beforePhotos,
           afterPhotos: duty.afterPhotos,
         })),
@@ -503,20 +505,35 @@ function buildReportPrintHtml(report: ServiceReportItem) {
   const dutiesHtml = completedDuties.length === 0
     ? `<p class="muted">No completed duties found for this date range.</p>`
     : completedDuties.map((duty) => {
-      const photoColumn = (title: string, photos: string[]) => `
-        <div class="photo-section">
-          <p class="photo-title">${title}</p>
-          ${photos.length === 0
-            ? `<div class="empty-photo">${title}: no photos uploaded.</div>`
-            : `<div class="photos">${photos.map((photo) => `<img src="${escapeHtml(photo)}" alt="" />`).join("")}</div>`}
-        </div>
-      `;
+      const photoColumn = (title: string, photos: string[]) => {
+        const photoRows = Array.from(
+          { length: Math.ceil(photos.length / 2) },
+          (_, rowIndex) => photos.slice(rowIndex * 2, rowIndex * 2 + 2),
+        );
+
+        return `
+          <div class="photo-section">
+            <p class="photo-title">${title}</p>
+            ${photos.length === 0
+              ? `<div class="empty-photo">${title}: no photos uploaded.</div>`
+              : `<div class="photo-rows">
+                  ${photoRows.map((row) => `
+                    <div class="photo-row">
+                      ${row.map((photo) => `<div class="photo-item"><img src="${escapeHtml(photo)}" alt="" /></div>`).join("")}
+                    </div>
+                  `).join("")}
+                </div>`}
+          </div>
+        `;
+      };
 
       return `
         <section class="duty">
-          <h3>${escapeHtml(duty.title)}</h3>
-          <p class="cleaners"><strong>Cleaners:</strong> ${escapeHtml(cleanerAssignmentText(duty.assignedCleanerNames))}</p>
-          ${duty.description ? `<p class="description">${escapeHtml(reportDescriptionPreview(duty.description))}</p>` : ""}
+          <div class="duty-heading">
+            <h3>${escapeHtml(duty.title)}</h3>
+            <p class="cleaners"><strong>Cleaners:</strong> ${escapeHtml(cleanerAssignmentText(duty.assignedCleanerNames))}</p>
+            ${duty.description ? `<p class="description">${escapeHtml(reportDescriptionPreview(duty.description))}</p>` : ""}
+          </div>
           ${duty.beforePhotos.length || duty.afterPhotos.length ? `
             <div class="photo-grid">
               ${photoColumn("Before", duty.beforePhotos)}
@@ -535,6 +552,7 @@ function buildReportPrintHtml(report: ServiceReportItem) {
         <title>${escapeHtml(report.title)}</title>
         <style>
           * { box-sizing: border-box; }
+          @page { size: A4 portrait; margin: 14mm; }
           body { margin: 0; background: #f1f5f9; color: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
           .page { width: min(100%, 920px); margin: 0 auto; background: #fff; padding: 48px; min-height: 100vh; }
           .top { display: flex; justify-content: space-between; gap: 24px; color: #475569; font-size: 13px; font-weight: 700; }
@@ -549,19 +567,29 @@ function buildReportPrintHtml(report: ServiceReportItem) {
           .row strong { font-weight: 800; }
           .row span { text-align: right; color: #475569; }
           .section-title { margin-top: 56px; font-size: 28px; }
-          .duty { break-inside: avoid; margin-top: 24px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; }
+          .duty { break-inside: avoid-page; page-break-inside: avoid; margin-top: 24px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; }
+          .duty-heading { break-inside: avoid-page; page-break-inside: avoid; }
           .duty h3 { margin: 0; font-size: 20px; }
           .cleaners { margin: 8px 0 0; color: #64748b; font-size: 14px; }
           .description { margin: 12px 0 0; color: #475569; }
           .photo-grid { display: grid; grid-template-columns: 1fr; gap: 24px; margin-top: 18px; }
-          .photo-title { margin: 0 0 8px; color: #475569; font-size: 13px; font-weight: 800; }
-          .photos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-          .photos img { width: 100%; height: 220px; border-radius: 6px; object-fit: cover; }
+          .photo-title { break-after: avoid-page; page-break-after: avoid; margin: 0 0 8px; color: #475569; font-size: 13px; font-weight: 800; }
+          .photo-rows { display: grid; gap: 12px; }
+          .photo-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; break-inside: avoid-page; page-break-inside: avoid; }
+          .photo-item { min-width: 0; break-inside: avoid-page; page-break-inside: avoid; }
+          .photo-item img { display: block; width: 100%; height: 220px; border-radius: 6px; object-fit: cover; break-inside: avoid-page; page-break-inside: avoid; }
           .empty-photo { border-radius: 6px; background: #f8fafc; padding: 12px; color: #64748b; font-size: 13px; }
           .muted { color: #64748b; }
           @media print {
-            body { background: #fff; }
-            .page { width: 100%; padding: 28px; }
+            html, body { width: 100%; background: #fff; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            .page { width: auto; margin: 0; padding: 0; min-height: auto; }
+            .top, .brand, .rows, .section-title, .duty-heading, .photo-row, .empty-photo { break-inside: avoid-page; page-break-inside: avoid; }
+            .section-title { break-after: avoid-page; page-break-after: avoid; }
+            .duty { box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+            .photo-grid, .photo-rows { display: block; }
+            .photo-section + .photo-section { margin-top: 24px; }
+            .photo-row + .photo-row { margin-top: 12px; }
+            .photo-item img { max-height: 58mm; }
           }
         </style>
       </head>

@@ -7,6 +7,7 @@ export type ReportDutySnapshot = {
   assignedCleanerNames?: string[];
   status: string;
   dueDate: string | null;
+  completedAt?: string | null;
   beforePhotos: string[];
   afterPhotos: string[];
 };
