@@ -107,9 +107,18 @@ export async function createServiceReport(input: {
 }
 
 export async function deleteServiceReport(reportId: string) {
-  const { error } = await supabase.from("service_reports").delete().eq("id", reportId);
+  const { data, error } = await supabase
+    .from("service_reports")
+    .delete()
+    .eq("id", reportId)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error("Report was not deleted. Check that your account has manager permissions.");
   }
 }
