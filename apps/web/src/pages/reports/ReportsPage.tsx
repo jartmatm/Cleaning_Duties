@@ -19,6 +19,8 @@ import { listSites } from "../../services/sites-service";
 type DateRange = {
   dateFrom: string;
   dateTo: string;
+  timeFrom?: string;
+  timeTo?: string;
 };
 
 type MediaItem = {
@@ -43,9 +45,25 @@ function isInRange(dateValue: string | null, range: DateRange) {
   }
 
   const date = new Date(dateValue);
-  const from = new Date(`${range.dateFrom}T00:00:00`);
-  const to = new Date(`${range.dateTo}T23:59:59`);
+  const from = new Date(`${range.dateFrom}T${range.timeFrom ?? "00:00"}:00`);
+  const to = new Date(`${range.dateTo}T${range.timeTo ?? "23:59"}:59`);
   return date >= from && date <= to;
+}
+
+function isValidDateRange(range: DateRange) {
+  if (!range.dateFrom || !range.dateTo || !range.timeFrom || !range.timeTo) {
+    return false;
+  }
+
+  const from = new Date(`${range.dateFrom}T${range.timeFrom}:00`);
+  const to = new Date(`${range.dateTo}T${range.timeTo}:59`);
+  return !Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime()) && from <= to;
+}
+
+function formatReportRange(snapshot: Pick<ServiceReportSnapshot, "dateFrom" | "dateTo" | "timeFrom" | "timeTo">) {
+  const from = snapshot.timeFrom ? `${snapshot.dateFrom} ${snapshot.timeFrom}` : snapshot.dateFrom;
+  const to = snapshot.timeTo ? `${snapshot.dateTo} ${snapshot.timeTo}` : snapshot.dateTo;
+  return from === to ? from : `${from} / ${to}`;
 }
 
 function dutyMatchesRange(duty: DutyItem, range: DateRange) {
@@ -131,7 +149,7 @@ export function ReportsPage() {
   const [isMediaOpen, setIsMediaOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState<ServiceReportItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ServiceReportItem | null>(null);
-  const [range, setRange] = useState<DateRange>({ dateFrom: todayValue(), dateTo: todayValue() });
+  const [range, setRange] = useState<DateRange>({ dateFrom: todayValue(), dateTo: todayValue(), timeFrom: "00:00", timeTo: "23:59" });
   const [mediaRange, setMediaRange] = useState<DateRange>({ dateFrom: todayValue(), dateTo: todayValue() });
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
   const [preparedMediaFiles, setPreparedMediaFiles] = useState<PreparedMediaFile[]>([]);
@@ -208,6 +226,10 @@ export function ReportsPage() {
         throw new Error("Missing report context");
       }
 
+      if (!isValidDateRange(range)) {
+        throw new Error("Choose a valid report start and end time.");
+      }
+
       const rangedDuties = duties.filter((duty) => dutyMatchesRange(duty, range));
       const reportDuties = rangedDuties.filter(isCompletedReportDuty);
       const siteMembers = activeSite ? await listAssignableMembers(activeSite.id) : [];
@@ -223,6 +245,8 @@ export function ReportsPage() {
         preparedBy: profile.full_name,
         dateFrom: range.dateFrom,
         dateTo: range.dateTo,
+        timeFrom: range.timeFrom,
+        timeTo: range.timeTo,
         generatedAt: new Date().toISOString(),
         completedCount: reportDuties.length,
         totalCount: rangedDuties.length,
@@ -379,7 +403,7 @@ export function ReportsPage() {
                   >
                     <p className="font-semibold text-slate-950">{report.title}</p>
                     <p className="mt-1 text-sm text-slate-500">
-                      {report.dateFrom} to {report.dateTo} · {new Date(report.createdAt).toLocaleString()}
+                      {formatReportRange(report.snapshot)} · {new Date(report.createdAt).toLocaleString()}
                     </p>
                   </button>
                   <div className="flex shrink-0 items-center gap-1">
@@ -474,7 +498,7 @@ function escapeHtml(value: string | null | undefined) {
 function buildReportPrintHtml(report: ServiceReportItem) {
   const snapshot = report.snapshot;
   const score = snapshot.totalCount > 0 ? Math.round((snapshot.completedCount / snapshot.totalCount) * 100) : 0;
-  const reportDate = snapshot.dateFrom === snapshot.dateTo ? snapshot.dateFrom : `${snapshot.dateFrom} / ${snapshot.dateTo}`;
+  const reportDate = formatReportRange(snapshot);
   const completedDuties = snapshot.duties.filter(isCompletedReportDuty);
   const dutiesHtml = completedDuties.length === 0
     ? `<p class="muted">No completed duties found for this date range.</p>`
@@ -617,18 +641,20 @@ function DateRangeDialog(props: {
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
       <Card className="w-full max-w-lg space-y-5 p-5">
         <div className="flex items-start justify-between gap-4">
-          <SectionTitle title={props.title} description="Choose a date range. Use the same date for a single-day report." />
+          <SectionTitle title={props.title} description="Choose the start and end date and time for this report." />
           <button type="button" onClick={props.onCancel} className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          <DateInput label="From" value={props.range.dateFrom} onChange={(dateFrom) => props.onRangeChange({ ...props.range, dateFrom })} />
-          <DateInput label="To" value={props.range.dateTo} onChange={(dateTo) => props.onRangeChange({ ...props.range, dateTo })} />
+          <DateInput label="From date" value={props.range.dateFrom} onChange={(dateFrom) => props.onRangeChange({ ...props.range, dateFrom })} />
+          <TimeInput label="From time" value={props.range.timeFrom ?? ""} onChange={(timeFrom) => props.onRangeChange({ ...props.range, timeFrom })} />
+          <DateInput label="To date" value={props.range.dateTo} onChange={(dateTo) => props.onRangeChange({ ...props.range, dateTo })} />
+          <TimeInput label="To time" value={props.range.timeTo ?? ""} onChange={(timeTo) => props.onRangeChange({ ...props.range, timeTo })} />
         </div>
         <div className="flex justify-end gap-3">
           <Button type="button" variant="secondary" onClick={props.onCancel} disabled={props.isPending}>Cancel</Button>
-          <Button type="button" onClick={props.onConfirm} disabled={props.isPending || !props.range.dateFrom || !props.range.dateTo}>
+          <Button type="button" onClick={props.onConfirm} disabled={props.isPending || !isValidDateRange(props.range)}>
             {props.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
             {props.confirmLabel}
           </Button>
@@ -643,6 +669,15 @@ function DateInput(props: { label: string; value: string; onChange: (value: stri
     <label className="space-y-2">
       <span className="text-sm font-medium text-slate-700">{props.label}</span>
       <input type="date" value={props.value} onChange={(event) => props.onChange(event.target.value)} className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none" />
+    </label>
+  );
+}
+
+function TimeInput(props: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="space-y-2">
+      <span className="text-sm font-medium text-slate-700">{props.label}</span>
+      <input type="time" value={props.value} onChange={(event) => props.onChange(event.target.value)} className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none" />
     </label>
   );
 }
@@ -678,7 +713,7 @@ function ReportPreview({ report }: { report: ServiceReportItem | null }) {
             {snapshot.siteName ?? snapshot.companyName} - Cleaning Service Report
           </h2>
           <div className="mt-8 flex flex-wrap items-center justify-between gap-4 text-xl text-slate-600">
-            <p>{snapshot.dateFrom === snapshot.dateTo ? snapshot.dateFrom : `${snapshot.dateFrom} / ${snapshot.dateTo}`} / {snapshot.preparedBy}</p>
+            <p>{formatReportRange(snapshot)} / {snapshot.preparedBy}</p>
             <p className="font-bold text-emerald-700">Complete</p>
           </div>
         </div>

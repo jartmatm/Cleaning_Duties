@@ -18,6 +18,8 @@ export type ServiceReportSnapshot = {
   preparedBy: string;
   dateFrom: string;
   dateTo: string;
+  timeFrom?: string;
+  timeTo?: string;
   generatedAt: string;
   completedCount: number;
   totalCount: number;
