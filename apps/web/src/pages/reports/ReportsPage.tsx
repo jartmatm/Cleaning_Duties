@@ -64,6 +64,15 @@ function cleanerAssignmentText(assignedCleanerNames: string[] | undefined) {
   return assignedCleanerNames.length > 0 ? assignedCleanerNames.join(", ") : "Unassigned";
 }
 
+function reportDescriptionPreview(description: string) {
+  const trimmedDescription = description.trim();
+  const firstPeriodIndex = trimmedDescription.indexOf(".");
+
+  return firstPeriodIndex === -1
+    ? trimmedDescription
+    : trimmedDescription.slice(0, firstPeriodIndex + 1);
+}
+
 function mediaFromDuties(duties: DutyItem[]) {
   return duties.flatMap((duty) => [
     ...duty.beforePhotos.map((url, index) => ({ id: `${duty.id}-before-${index}`, dutyTitle: duty.title, type: "Before" as const, url })),
@@ -483,7 +492,7 @@ function buildReportPrintHtml(report: ServiceReportItem) {
         <section class="duty">
           <h3>${escapeHtml(duty.title)}</h3>
           <p class="cleaners"><strong>Cleaners:</strong> ${escapeHtml(cleanerAssignmentText(duty.assignedCleanerNames))}</p>
-          ${duty.description ? `<p class="description">${escapeHtml(duty.description)}</p>` : ""}
+          ${duty.description ? `<p class="description">${escapeHtml(reportDescriptionPreview(duty.description))}</p>` : ""}
           ${duty.beforePhotos.length || duty.afterPhotos.length ? `
             <div class="photo-grid">
               ${photoColumn("Before", duty.beforePhotos)}
@@ -692,7 +701,7 @@ function ReportPreview({ report }: { report: ServiceReportItem | null }) {
                   <p className="mt-2 text-sm text-slate-500">
                     <span className="font-semibold text-slate-700">Cleaners:</span> {cleanerAssignmentText(duty.assignedCleanerNames)}
                   </p>
-                  {duty.description ? <p className="mt-3 text-slate-600">{duty.description}</p> : null}
+                  {duty.description ? <p className="mt-3 text-slate-600">{reportDescriptionPreview(duty.description)}</p> : null}
                   {duty.beforePhotos.length || duty.afterPhotos.length ? (
                     <div className="mt-4 space-y-6">
                       <PhotoStrip title="Before" photos={duty.beforePhotos} />
