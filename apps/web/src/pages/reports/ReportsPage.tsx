@@ -45,6 +45,10 @@ function dutyMatchesRange(duty: DutyItem, range: DateRange) {
   return isInRange(duty.dueDate, range) || isInRange(duty.updatedAt, range) || isInRange(duty.createdAt, range);
 }
 
+function isCompletedReportDuty(duty: { status: string }) {
+  return duty.status === "Completed" || duty.status === "Archived";
+}
+
 function mediaFromDuties(duties: DutyItem[]) {
   return duties.flatMap((duty) => [
     ...duty.beforePhotos.map((url, index) => ({ id: `${duty.id}-before-${index}`, dutyTitle: duty.title, type: "Before" as const, url })),
@@ -98,7 +102,8 @@ export function ReportsPage() {
         throw new Error("Missing report context");
       }
 
-      const reportDuties = duties.filter((duty) => dutyMatchesRange(duty, range));
+      const rangedDuties = duties.filter((duty) => dutyMatchesRange(duty, range));
+      const reportDuties = rangedDuties.filter(isCompletedReportDuty);
       const snapshot: ServiceReportSnapshot = {
         companyName: company.name,
         companyLogoUrl: company.logoUrl,
@@ -107,8 +112,8 @@ export function ReportsPage() {
         dateFrom: range.dateFrom,
         dateTo: range.dateTo,
         generatedAt: new Date().toISOString(),
-        completedCount: reportDuties.filter((duty) => duty.status === "Completed" || duty.status === "Archived").length,
-        totalCount: reportDuties.length,
+        completedCount: reportDuties.length,
+        totalCount: rangedDuties.length,
         duties: reportDuties.map((duty) => ({
           id: duty.id,
           title: duty.title,
@@ -317,11 +322,12 @@ function buildReportPrintHtml(report: ServiceReportItem) {
   const snapshot = report.snapshot;
   const score = snapshot.totalCount > 0 ? Math.round((snapshot.completedCount / snapshot.totalCount) * 100) : 0;
   const reportDate = snapshot.dateFrom === snapshot.dateTo ? snapshot.dateFrom : `${snapshot.dateFrom} / ${snapshot.dateTo}`;
-  const dutiesHtml = snapshot.duties.length === 0
-    ? `<p class="muted">No duties found for this date range.</p>`
-    : snapshot.duties.map((duty) => {
+  const completedDuties = snapshot.duties.filter(isCompletedReportDuty);
+  const dutiesHtml = completedDuties.length === 0
+    ? `<p class="muted">No completed duties found for this date range.</p>`
+    : completedDuties.map((duty) => {
       const photoColumn = (title: string, photos: string[]) => `
-        <div>
+        <div class="photo-section">
           <p class="photo-title">${title}</p>
           ${photos.length === 0
             ? `<div class="empty-photo">${title}: no photos uploaded.</div>`
@@ -331,10 +337,6 @@ function buildReportPrintHtml(report: ServiceReportItem) {
 
       return `
         <section class="duty">
-          <div class="duty-head">
-            <h3>${escapeHtml(duty.title)}</h3>
-            <p>${escapeHtml(duty.status)}</p>
-          </div>
           ${duty.description ? `<p class="description">${escapeHtml(duty.description)}</p>` : ""}
           ${duty.beforePhotos.length || duty.afterPhotos.length ? `
             <div class="photo-grid">
@@ -369,14 +371,11 @@ function buildReportPrintHtml(report: ServiceReportItem) {
           .row span { text-align: right; color: #475569; }
           .section-title { margin-top: 56px; font-size: 28px; }
           .duty { break-inside: avoid; margin-top: 24px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; }
-          .duty-head { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
-          .duty h3 { margin: 0; font-size: 20px; }
-          .duty-head p { margin: 0; color: #64748b; font-weight: 700; }
-          .description { margin: 12px 0 0; color: #475569; }
-          .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 18px; }
+          .description { margin: 0; color: #475569; }
+          .photo-grid { display: grid; grid-template-columns: 1fr; gap: 24px; margin-top: 18px; }
           .photo-title { margin: 0 0 8px; color: #475569; font-size: 13px; font-weight: 800; }
-          .photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-          .photos img { width: 100%; height: 110px; border-radius: 6px; object-fit: cover; }
+          .photos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+          .photos img { width: 100%; height: 220px; border-radius: 6px; object-fit: cover; }
           .empty-photo { border-radius: 6px; background: #f8fafc; padding: 12px; color: #64748b; font-size: 13px; }
           .muted { color: #64748b; }
           @media print {
@@ -503,6 +502,7 @@ function ReportPreview({ report }: { report: ServiceReportItem | null }) {
 
   const snapshot = report.snapshot;
   const score = snapshot.totalCount > 0 ? Math.round((snapshot.completedCount / snapshot.totalCount) * 100) : 0;
+  const completedDuties = snapshot.duties.filter(isCompletedReportDuty);
 
   return (
     <Card className="overflow-hidden p-0">
@@ -535,17 +535,14 @@ function ReportPreview({ report }: { report: ServiceReportItem | null }) {
         <div className="mt-12">
           <h3 className="text-2xl font-bold tracking-tight">Services performed</h3>
           <div className="mt-6 space-y-6">
-            {snapshot.duties.length === 0 ? (
-              <p className="text-slate-500">No duties found for this date range.</p>
+            {completedDuties.length === 0 ? (
+              <p className="text-slate-500">No completed duties found for this date range.</p>
             ) : (
-              snapshot.duties.map((duty) => (
+              completedDuties.map((duty) => (
                 <div key={duty.id} className="rounded-md border border-slate-200 p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-lg font-bold">{duty.title}</p>
-                    <p className="text-sm font-semibold text-slate-500">{duty.status}</p>
-                  </div>
+                  {duty.description ? <p className="text-slate-600">{duty.description}</p> : null}
                   {duty.beforePhotos.length || duty.afterPhotos.length ? (
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="mt-4 space-y-6">
                       <PhotoStrip title="Before" photos={duty.beforePhotos} />
                       <PhotoStrip title="After" photos={duty.afterPhotos} />
                     </div>
@@ -577,9 +574,9 @@ function PhotoStrip({ title, photos }: { title: string; photos: string[] }) {
   return (
     <div>
       <p className="mb-2 text-sm font-bold text-slate-600">{title}</p>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-3">
         {photos.map((photo) => (
-          <img key={photo} src={photo} alt="" className="h-24 w-full rounded-md object-cover" />
+          <img key={photo} src={photo} alt="" className="h-48 w-full rounded-md object-cover" />
         ))}
       </div>
     </div>
