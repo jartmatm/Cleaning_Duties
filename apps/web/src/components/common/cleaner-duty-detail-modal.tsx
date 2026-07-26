@@ -247,7 +247,7 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
           ) : (
             <Button type="button" onClick={() => completeMutation.mutate()} disabled={completeMutation.isPending}>
               {completeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Completed
+              {completeMutation.isPending ? "Uploading..." : "Completed"}
             </Button>
           )}
         </div>
