@@ -34,6 +34,8 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
   const isCompletedDuty = duty.status === "Completed";
   const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
   const [afterFiles, setAfterFiles] = useState<File[]>([]);
+  const [uploadingBeforeFileIndexes, setUploadingBeforeFileIndexes] = useState<Set<number>>(new Set());
+  const [uploadingAfterFileIndexes, setUploadingAfterFileIndexes] = useState<Set<number>>(new Set());
   const [removedBeforePhotoUrls, setRemovedBeforePhotoUrls] = useState<string[]>([]);
   const [removedAfterPhotoUrls, setRemovedAfterPhotoUrls] = useState<string[]>([]);
   const [comment, setComment] = useState("");
@@ -62,12 +64,40 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
       if (!site) {
         throw new Error("Missing site context");
       }
-      const beforeUrls = beforeFiles.length
-        ? await uploadDutyEvidencePhotos({ bucketName: site.storageBucket, siteId: site.id, dutyTitle: duty.title, files: beforeFiles, type: "before" })
-        : [];
-      const afterUrls = afterFiles.length
-        ? await uploadDutyEvidencePhotos({ bucketName: site.storageBucket, siteId: site.id, dutyTitle: duty.title, files: afterFiles, type: "after" })
-        : [];
+      setUploadingBeforeFileIndexes(new Set(beforeFiles.map((_, index) => index)));
+      setUploadingAfterFileIndexes(new Set(afterFiles.map((_, index) => index)));
+      const beforeUrls: string[] = [];
+      for (const [index, file] of beforeFiles.entries()) {
+        try {
+          const [photoUrl] = await uploadDutyEvidencePhotos({ bucketName: site.storageBucket, siteId: site.id, dutyTitle: duty.title, files: [file], type: "before" });
+          if (!photoUrl) {
+            throw new Error("Before photo upload failed without a public URL");
+          }
+          beforeUrls.push(photoUrl);
+        } finally {
+          setUploadingBeforeFileIndexes((current) => {
+            const next = new Set(current);
+            next.delete(index);
+            return next;
+          });
+        }
+      }
+      const afterUrls: string[] = [];
+      for (const [index, file] of afterFiles.entries()) {
+        try {
+          const [photoUrl] = await uploadDutyEvidencePhotos({ bucketName: site.storageBucket, siteId: site.id, dutyTitle: duty.title, files: [file], type: "after" });
+          if (!photoUrl) {
+            throw new Error("After photo upload failed without a public URL");
+          }
+          afterUrls.push(photoUrl);
+        } finally {
+          setUploadingAfterFileIndexes((current) => {
+            const next = new Set(current);
+            next.delete(index);
+            return next;
+          });
+        }
+      }
       const evidenceChanged = beforeUrls.length > 0
         || afterUrls.length > 0
         || removedBeforePhotoUrls.length > 0
@@ -107,7 +137,11 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
       }
       onClose();
     },
-    onError: (error) => notify({ tone: "error", title: "Could not complete duty", message: error instanceof Error ? error.message : "Unknown error" }),
+    onError: (error) => {
+      setUploadingBeforeFileIndexes(new Set());
+      setUploadingAfterFileIndexes(new Set());
+      notify({ tone: "error", title: "Could not complete duty", message: error instanceof Error ? error.message : "Unknown error" });
+    },
   });
 
   function showPreviousReferencePhoto() {
@@ -206,6 +240,7 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
             label="Before photos"
             existingPhotoUrls={visibleBeforePhotoUrls}
             files={beforeFiles}
+            uploadingFileIndexes={uploadingBeforeFileIndexes}
             onChange={setBeforeFiles}
             onRemoveExisting={(photoUrl) => setRemovedBeforePhotoUrls((current) => [...current, photoUrl])}
             onRemoveFile={(fileIndex) => setBeforeFiles((current) => current.filter((_, index) => index !== fileIndex))}
@@ -215,6 +250,7 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
             label="After photos"
             existingPhotoUrls={visibleAfterPhotoUrls}
             files={afterFiles}
+            uploadingFileIndexes={uploadingAfterFileIndexes}
             onChange={setAfterFiles}
             onRemoveExisting={(photoUrl) => setRemovedAfterPhotoUrls((current) => [...current, photoUrl])}
             onRemoveFile={(fileIndex) => setAfterFiles((current) => current.filter((_, index) => index !== fileIndex))}
@@ -319,6 +355,7 @@ function PhotoPicker(props: {
   label: string;
   existingPhotoUrls: string[];
   files: File[];
+  uploadingFileIndexes: Set<number>;
   onChange: (files: File[]) => void;
   onRemoveExisting: (photoUrl: string) => void;
   onRemoveFile: (fileIndex: number) => void;
@@ -405,18 +442,28 @@ function PhotoPicker(props: {
             {previews.map((preview, index) => (
               <div key={`${preview.file.name}-${preview.file.lastModified}-${index}`} className="relative h-10 w-10 overflow-hidden rounded-md bg-white ring-1 ring-slate-200">
                 <img src={preview.previewUrl} alt={`New ${props.label.toLowerCase()} ${index + 1}`} className="h-full w-full object-cover" />
-                <button
-                  type="button"
-                  onKeyDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    props.onRemoveFile(index);
-                  }}
-                  className="absolute inset-0 flex items-center justify-center bg-slate-950/25 text-white transition hover:bg-slate-950/45"
-                  aria-label={`Remove new ${props.label.toLowerCase()} ${index + 1}`}
-                >
-                  <span className="rounded-full bg-slate-950/70 p-1"><X className="h-3 w-3" /></span>
-                </button>
+                {props.uploadingFileIndexes.has(index) ? (
+                  <span
+                    role="status"
+                    aria-label={`Uploading ${props.label.toLowerCase()} ${index + 1}`}
+                    className="absolute inset-0 flex items-center justify-center bg-slate-950/25 text-white"
+                  >
+                    <span className="rounded-full bg-slate-950/70 p-1"><Loader2 className="h-3 w-3 animate-spin" /></span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onKeyDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      props.onRemoveFile(index);
+                    }}
+                    className="absolute inset-0 flex items-center justify-center bg-slate-950/25 text-white transition hover:bg-slate-950/45"
+                    aria-label={`Remove new ${props.label.toLowerCase()} ${index + 1}`}
+                  >
+                    <span className="rounded-full bg-slate-950/70 p-1"><X className="h-3 w-3" /></span>
+                  </button>
+                )}
               </div>
             ))}
           </div>
