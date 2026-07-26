@@ -220,6 +220,24 @@ function toDateTimeLocalValue(dateValue: string | null) {
   return new Date(date.getTime() - timezoneOffsetMs).toISOString().slice(0, 16);
 }
 
+function matchesDutyDateRange(duty: DutyItem, dateFrom: string, dateTo: string) {
+  if (!dateFrom && !dateTo) {
+    return true;
+  }
+
+  const dutyStart = duty.startsAt ? new Date(duty.startsAt) : duty.dueDate ? new Date(duty.dueDate) : null;
+  const dutyEnd = duty.dueDate ? new Date(duty.dueDate) : duty.startsAt ? new Date(duty.startsAt) : null;
+
+  if (!dutyStart || !dutyEnd || Number.isNaN(dutyStart.getTime()) || Number.isNaN(dutyEnd.getTime())) {
+    return false;
+  }
+
+  const rangeStart = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
+  const rangeEnd = dateTo ? new Date(`${dateTo}T23:59:59.999`) : null;
+
+  return (!rangeStart || dutyEnd >= rangeStart) && (!rangeEnd || dutyStart <= rangeEnd);
+}
+
 function isCleanerActiveDuty(duty: DutyItem) {
   return duty.status === "Pending" || duty.status === "Draft" || duty.status === "Overdue" || duty.status === "In Progress";
 }
@@ -254,6 +272,9 @@ export function DutiesPage() {
   const [preloadedSuggestionsDismissed, setPreloadedSuggestionsDismissed] = useState(false);
   const [showCompletionCelebration, setShowCompletionCelebration] = useState(false);
   const [cleanerDutyFilter, setCleanerDutyFilter] = useState<CleanerDutyFilter>("Pending");
+  const [showManagerFilters, setShowManagerFilters] = useState(false);
+  const [managerDateFrom, setManagerDateFrom] = useState("");
+  const [managerDateTo, setManagerDateTo] = useState("");
   const [managerPriorityFilter, setManagerPriorityFilter] = useState<ManagerPriorityFilter>("All");
   const [managerStatusFilter, setManagerStatusFilter] = useState<ManagerStatusFilter>("All");
   const [saveAsPreloadedDuty, setSaveAsPreloadedDuty] = useState(false);
@@ -485,8 +506,9 @@ export function DutiesPage() {
       return siteDuties.filter((duty) => {
         const matchesPriority = managerPriorityFilter === "All" || duty.priority === managerPriorityFilter;
         const matchesStatus = managerStatusFilter === "All" || duty.status === managerStatusFilter;
+        const matchesDate = matchesDutyDateRange(duty, managerDateFrom, managerDateTo);
 
-        return matchesPriority && matchesStatus;
+        return matchesPriority && matchesStatus && matchesDate;
       });
     }
 
@@ -499,7 +521,7 @@ export function DutiesPage() {
     }
 
     return siteDuties.filter((duty) => duty.status === cleanerDutyFilter);
-  }, [cleanerDutyFilter, managerPriorityFilter, managerStatusFilter, role, siteDuties]);
+  }, [cleanerDutyFilter, managerDateFrom, managerDateTo, managerPriorityFilter, managerStatusFilter, role, siteDuties]);
   const assigneesById = useMemo(
     () => new Map(assignees.map((assignee) => [assignee.id, assignee])),
     [assignees],
@@ -774,7 +796,12 @@ export function DutiesPage() {
         description={role === "Cleaner" ? "Review and complete your assigned duties for the selected site." : "Review the current duty load, filter by priority or status, and open any duty to manage assignments and evidence."}
         actions={role === "Cleaner" ? null : (
           <>
-            <Button variant="secondary">
+            <Button
+              variant="secondary"
+              aria-expanded={showManagerFilters}
+              aria-controls="duty-manager-filters"
+              onClick={() => setShowManagerFilters((current) => !current)}
+            >
               <Filter className="h-4 w-4" />
               Filters
             </Button>
@@ -829,54 +856,74 @@ export function DutiesPage() {
             </div>
           </div>
         </div>
-        {role !== "Cleaner" ? (
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            {MANAGER_PRIORITY_FILTERS.map((priority) => {
-              const isActive = managerPriorityFilter === priority;
-
-              return (
-                <Button
-                  key={priority}
-                  type="button"
-                  variant={isActive ? "primary" : "secondary"}
-                  onClick={() => handleManagerPriorityFilter(priority)}
-                >
-                  {priority === "All" ? "All priorities" : priority}
-                </Button>
-              );
-            })}
+        {role !== "Cleaner" ? showManagerFilters ? (
+          <div id="duty-manager-filters" className="grid gap-4 border-t border-slate-200 pt-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Date from</label>
+              <Input
+                type="date"
+                value={managerDateFrom}
+                max={managerDateTo || undefined}
+                onChange={(event) => {
+                  setManagerDateFrom(event.target.value);
+                  scrollToDutyList();
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Date to</label>
+              <Input
+                type="date"
+                value={managerDateTo}
+                min={managerDateFrom || undefined}
+                onChange={(event) => {
+                  setManagerDateTo(event.target.value);
+                  scrollToDutyList();
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Priority</label>
+              <select
+                value={managerPriorityFilter}
+                onChange={(event) => handleManagerPriorityFilter(event.target.value as ManagerPriorityFilter)}
+                className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
+              >
+                {MANAGER_PRIORITY_FILTERS.map((priority) => (
+                  <option key={priority} value={priority}>{priority === "All" ? "All priorities" : priority}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Status</label>
+              <select
+                value={managerStatusFilter}
+                onChange={(event) => handleManagerStatusFilter(event.target.value as ManagerStatusFilter)}
+                className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
+              >
+                {MANAGER_STATUS_FILTERS.map((status) => (
+                  <option key={status} value={status}>{status === "All" ? "All statuses" : status}</option>
+                ))}
+              </select>
+            </div>
+            <div className="sm:col-span-2 xl:col-span-4">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setManagerDateFrom("");
+                  setManagerDateTo("");
+                  setManagerPriorityFilter("All");
+                  setManagerStatusFilter("All");
+                  scrollToDutyList();
+                }}
+              >
+                Clear filters
+              </Button>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {MANAGER_STATUS_FILTERS.map((status) => {
-              const isActive = managerStatusFilter === status;
-
-              return status === "All" ? (
-                <Button
-                  key={status}
-                  type="button"
-                  variant={isActive ? "primary" : "ghost"}
-                  onClick={() => handleManagerStatusFilter(status)}
-                >
-                  All statuses
-                </Button>
-              ) : (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() => handleManagerStatusFilter(status)}
-                  className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${
-                    isActive
-                      ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-                  }`}
-                >
-                  <DutyStatusBadge status={status} />
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        ) : (
+          null
         ) : (
         <div className="flex flex-wrap gap-2">
           {CLEANER_DUTY_FILTERS.map((filter) => {
