@@ -96,6 +96,66 @@ function isTodayDuty(duty: DutyItem) {
   return isInTodaysShiftWindow(duty) || (duty.status === "Completed" && isToday(duty.completedAt));
 }
 
+function getTime(dateValue: string | null) {
+  if (!dateValue) {
+    return null;
+  }
+
+  const time = new Date(dateValue).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function isSameShiftWindow(duty: DutyItem, startsAt: number, dueDate: number | null) {
+  const dutyStart = getTime(duty.startsAt);
+  const dutyEnd = getTime(duty.dueDate);
+
+  return dutyStart === startsAt && (dueDate === null || dutyEnd === dueDate);
+}
+
+function getCleanerProgressDuties(siteDuties: DutyItem[]) {
+  const now = Date.now();
+  const activeShiftDuty = siteDuties
+    .filter((duty) => {
+      const startsAt = getTime(duty.startsAt);
+      const dueDate = getTime(duty.dueDate);
+      return startsAt !== null && startsAt <= now && (dueDate === null || dueDate > now);
+    })
+    .sort((a, b) => (getTime(a.startsAt) ?? 0) - (getTime(b.startsAt) ?? 0))[0];
+
+  if (activeShiftDuty) {
+    const shiftStart = getTime(activeShiftDuty.startsAt) ?? now;
+    const shiftEnd = getTime(activeShiftDuty.dueDate);
+
+    return siteDuties.filter((duty) => {
+      if (isSameShiftWindow(duty, shiftStart, shiftEnd)) {
+        return true;
+      }
+
+      const completedAt = getTime(duty.completedAt);
+      return duty.status === "Completed"
+        && completedAt !== null
+        && completedAt >= shiftStart
+        && (shiftEnd === null || completedAt <= shiftEnd);
+    });
+  }
+
+  const nextScheduledDuty = siteDuties
+    .filter((duty) => duty.status === "Scheduled")
+    .filter((duty) => {
+      const startsAt = getTime(duty.startsAt);
+      return startsAt !== null && startsAt > now;
+    })
+    .sort((a, b) => (getTime(a.startsAt) ?? 0) - (getTime(b.startsAt) ?? 0))[0];
+
+  if (!nextScheduledDuty) {
+    return [];
+  }
+
+  const nextStart = getTime(nextScheduledDuty.startsAt) ?? 0;
+  const nextEnd = getTime(nextScheduledDuty.dueDate);
+  return siteDuties.filter((duty) => duty.status === "Scheduled" && isSameShiftWindow(duty, nextStart, nextEnd));
+}
+
 function formatSiteShift(site: SiteItem | null | undefined) {
   return site?.shiftStartTime && site.shiftEndTime ? `${site.shiftStartTime} - ${site.shiftEndTime}` : "No site shift";
 }
@@ -353,34 +413,34 @@ function CleanerDashboard() {
     () => (activeSite ? duties.filter((duty) => duty.siteId === activeSite.id) : duties),
     [activeSite, duties],
   );
-  const todaySiteDuties = useMemo(() => siteDuties.filter(isTodayDuty), [siteDuties]);
+  const progressDuties = useMemo(() => getCleanerProgressDuties(siteDuties), [siteDuties]);
 
   useEffect(() => {
-    const hasInProgressDuties = todaySiteDuties.some((duty) => duty.status === "In Progress");
+    const hasInProgressDuties = progressDuties.some((duty) => duty.status === "In Progress");
 
     if (activeFilter === "in-progress" && !hasInProgressDuties) {
       setActiveFilter("pending");
     }
-  }, [activeFilter, todaySiteDuties]);
+  }, [activeFilter, progressDuties]);
 
   const displayedDuties = useMemo(() => {
     if (activeFilter === "pending") {
-      return todaySiteDuties.filter(isPendingDuty);
+      return progressDuties.filter(isPendingDuty);
     }
     if (activeFilter === "in-progress") {
-      return todaySiteDuties.filter((duty) => duty.status === "In Progress");
+      return progressDuties.filter((duty) => duty.status === "In Progress");
     }
     if (activeFilter === "completed") {
-      return todaySiteDuties.filter((duty) => duty.status === "Completed");
+      return progressDuties.filter((duty) => duty.status === "Completed");
     }
     return [];
-  }, [activeFilter, todaySiteDuties]);
+  }, [activeFilter, progressDuties]);
   const siteIncidents = useMemo(
     () => (activeSite ? incidents.filter((incident) => incident.siteId === activeSite.id) : incidents),
     [activeSite, incidents],
   );
-  const completedDutiesCount = todaySiteDuties.filter((duty) => duty.status === "Completed").length;
-  const remainingDutiesCount = Math.max(todaySiteDuties.length - completedDutiesCount, 0);
+  const completedDutiesCount = progressDuties.filter((duty) => duty.status === "Completed").length;
+  const remainingDutiesCount = Math.max(progressDuties.length - completedDutiesCount, 0);
 
   function handleKpiClick(filter: CleanerFilter) {
     setActiveFilter(filter);
@@ -404,8 +464,8 @@ function CleanerDashboard() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiButton active={activeFilter === "pending"} label="Pending Duties" value={String(todaySiteDuties.filter(isPendingDuty).length)} detail="Ready to start" icon={<ListTodo className="h-5 w-5" />} onClick={() => handleKpiClick("pending")} />
-        <KpiButton active={activeFilter === "in-progress"} label="In Progress" value={String(todaySiteDuties.filter((duty) => duty.status === "In Progress").length)} detail="Currently open" icon={<Loader2 className="h-5 w-5" />} onClick={() => handleKpiClick("in-progress")} />
+        <KpiButton active={activeFilter === "pending"} label="Pending Duties" value={String(progressDuties.filter(isPendingDuty).length)} detail="Ready to start" icon={<ListTodo className="h-5 w-5" />} onClick={() => handleKpiClick("pending")} />
+        <KpiButton active={activeFilter === "in-progress"} label="In Progress" value={String(progressDuties.filter((duty) => duty.status === "In Progress").length)} detail="Currently open" icon={<Loader2 className="h-5 w-5" />} onClick={() => handleKpiClick("in-progress")} />
         <KpiButton active={activeFilter === "completed"} label="Completed" value={String(completedDutiesCount)} detail="Finished today" icon={<CheckCircle2 className="h-5 w-5" />} onClick={() => handleKpiClick("completed")} />
         <KpiButton active={activeFilter === "incidents"} label="Incidents" value={String(siteIncidents.length)} detail="Reported by you" icon={<CircleAlert className="h-5 w-5" />} onClick={() => handleKpiClick("incidents")} />
       </div>
