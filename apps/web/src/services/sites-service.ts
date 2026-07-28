@@ -1,6 +1,11 @@
 import { siteFormSchema, type SiteFormInput } from "@cleaning-duties/shared";
 import { supabase } from "./supabase-client";
 
+const SITE_SELECT = "id, company_id, name, address, notes, info_photos, storage_bucket, shift_start_time, shift_end_time, created_at, updated_at";
+const SITE_SELECT_WITHOUT_SHIFT = "id, company_id, name, address, notes, info_photos, storage_bucket, created_at, updated_at";
+const SITE_MEMBER_SELECT = `sites(${SITE_SELECT})`;
+const SITE_MEMBER_SELECT_WITHOUT_SHIFT = `sites(${SITE_SELECT_WITHOUT_SHIFT})`;
+
 export type SiteRow = {
   id: string;
   company_id: string;
@@ -14,6 +19,11 @@ export type SiteRow = {
   created_at: string;
   updated_at: string;
 };
+
+function isMissingShiftColumnError(error: { message?: string; code?: string }) {
+  const message = error.message?.toLowerCase() ?? "";
+  return error.code === "42703" || message.includes("shift_start_time") || message.includes("shift_end_time");
+}
 
 export type SiteItem = {
   id: string;
@@ -46,7 +56,7 @@ function mapSite(row: SiteRow): SiteItem {
 }
 
 export async function listSites(companyId: string, search = "") {
-  let query = supabase.from("sites").select("id, company_id, name, address, notes, info_photos, storage_bucket, shift_start_time, shift_end_time, created_at, updated_at").eq("company_id", companyId);
+  let query = supabase.from("sites").select(SITE_SELECT).eq("company_id", companyId);
 
   if (search.trim()) {
     query = query.ilike("name", `%${search.trim()}%`);
@@ -55,6 +65,22 @@ export async function listSites(companyId: string, search = "") {
   const { data, error } = await query.order("created_at", { ascending: false });
 
   if (error) {
+    if (isMissingShiftColumnError(error)) {
+      let fallbackQuery = supabase.from("sites").select(SITE_SELECT_WITHOUT_SHIFT).eq("company_id", companyId);
+
+      if (search.trim()) {
+        fallbackQuery = fallbackQuery.ilike("name", `%${search.trim()}%`);
+      }
+
+      const { data: fallbackData, error: fallbackError } = await fallbackQuery.order("created_at", { ascending: false });
+
+      if (fallbackError) {
+        throw new Error(fallbackError.message);
+      }
+
+      return (fallbackData ?? []).map((row) => mapSite(row as SiteRow));
+    }
+
     throw new Error(error.message);
   }
 
@@ -62,14 +88,32 @@ export async function listSites(companyId: string, search = "") {
 }
 
 export async function listMySites(profileId: string, search = "") {
-  let query = supabase
+  const { data, error } = await supabase
     .from("site_members")
-    .select("sites(id, company_id, name, address, notes, info_photos, storage_bucket, shift_start_time, shift_end_time, created_at, updated_at)")
+    .select(SITE_MEMBER_SELECT)
     .eq("profile_id", profileId);
 
-  const { data, error } = await query;
-
   if (error) {
+    if (isMissingShiftColumnError(error)) {
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from("site_members")
+        .select(SITE_MEMBER_SELECT_WITHOUT_SHIFT)
+        .eq("profile_id", profileId);
+
+      if (fallbackError) {
+        throw new Error(fallbackError.message);
+      }
+
+      const normalizedSearch = search.trim().toLowerCase();
+
+      return (fallbackData ?? [])
+        .map((row) => (row as unknown as { sites: SiteRow | null }).sites)
+        .filter((site): site is SiteRow => site !== null)
+        .filter((site) => !normalizedSearch || site.name.toLowerCase().includes(normalizedSearch))
+        .map(mapSite)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+
     throw new Error(error.message);
   }
 
@@ -96,7 +140,7 @@ export async function createSite(companyId: string, input: SiteFormInput) {
       shift_start_time: parsed.shiftStartTime || null,
       shift_end_time: parsed.shiftEndTime || null,
     })
-    .select("id, company_id, name, address, notes, info_photos, storage_bucket, shift_start_time, shift_end_time, created_at, updated_at")
+    .select(SITE_SELECT)
     .single();
 
   if (error) {
@@ -119,7 +163,7 @@ export async function updateSite(siteId: string, input: SiteFormInput) {
       shift_end_time: parsed.shiftEndTime || null,
     })
     .eq("id", siteId)
-    .select("id, company_id, name, address, notes, info_photos, storage_bucket, shift_start_time, shift_end_time, created_at, updated_at")
+    .select(SITE_SELECT)
     .single();
 
   if (error) {
@@ -155,7 +199,7 @@ export async function updateSiteInformation(siteId: string, input: { notes: stri
       updated_at: new Date().toISOString(),
     })
     .eq("id", siteId)
-    .select("id, company_id, name, address, notes, info_photos, storage_bucket, shift_start_time, shift_end_time, created_at, updated_at")
+    .select(SITE_SELECT)
     .single();
 
   if (error) {
