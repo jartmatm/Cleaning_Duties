@@ -5,6 +5,8 @@ export type CompanyRecord = {
   name: string;
   logo_url: string | null;
   color_palette: string;
+  archive_cleanup_enabled: boolean;
+  archive_cleanup_days: number;
 };
 
 export type CompanySettings = {
@@ -12,6 +14,8 @@ export type CompanySettings = {
   name: string;
   logoUrl: string | null;
   colorPalette: string;
+  archiveCleanupEnabled: boolean;
+  archiveCleanupDays: number;
 };
 
 function mapCompany(row: CompanyRecord): CompanySettings {
@@ -20,13 +24,15 @@ function mapCompany(row: CompanyRecord): CompanySettings {
     name: row.name,
     logoUrl: row.logo_url,
     colorPalette: row.color_palette,
+    archiveCleanupEnabled: row.archive_cleanup_enabled ?? false,
+    archiveCleanupDays: row.archive_cleanup_days ?? 10,
   };
 }
 
 export async function getCompanySettings(companyId: string) {
   const { data, error } = await supabase
     .from("companies")
-    .select("id, name, logo_url, color_palette")
+    .select("id, name, logo_url, color_palette, archive_cleanup_enabled, archive_cleanup_days")
     .eq("id", companyId)
     .single<CompanyRecord>();
 
@@ -51,7 +57,26 @@ export async function updateCompanySettings(companyId: string, input: { name: st
       color_palette: input.colorPalette,
     })
     .eq("id", companyId)
-    .select("id, name, logo_url, color_palette")
+    .select("id, name, logo_url, color_palette, archive_cleanup_enabled, archive_cleanup_days")
+    .single<CompanyRecord>();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapCompany(data);
+}
+
+export async function updateArchiveCleanupSettings(companyId: string, input: { enabled: boolean; days: number }) {
+  const days = Math.min(Math.max(Math.trunc(input.days) || 10, 1), 999);
+  const { data, error } = await supabase
+    .from("companies")
+    .update({
+      archive_cleanup_enabled: input.enabled,
+      archive_cleanup_days: days,
+    })
+    .eq("id", companyId)
+    .select("id, name, logo_url, color_palette, archive_cleanup_enabled, archive_cleanup_days")
     .single<CompanyRecord>();
 
   if (error) {

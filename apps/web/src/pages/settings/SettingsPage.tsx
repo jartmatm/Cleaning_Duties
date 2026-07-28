@@ -5,13 +5,14 @@ import { Check, ImageUp, Loader2, RotateCcw, Save } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
+import { Toggle } from "../../components/ui/base/toggle/toggle";
 import { PageHeader } from "../../components/common/page-header";
 import { SectionTitle } from "../../components/common/section-title";
 import { notify } from "../../components/common/toast";
 import { companyPalettes, getCompanyPalette } from "../../constants/company-palettes";
 import { useSession } from "../../hooks/use-session";
 import { updatePassword } from "../../services/auth-service";
-import { getCompanySettings, updateCompanySettings, uploadCompanyLogo } from "../../services/company-service";
+import { getCompanySettings, updateArchiveCleanupSettings, updateCompanySettings, uploadCompanyLogo } from "../../services/company-service";
 import { getCurrentProfile, updateProfileName } from "../../services/profile-service";
 
 export function SettingsPage() {
@@ -25,6 +26,8 @@ export function SettingsPage() {
   const [selectedPalette, setSelectedPalette] = useState("midnight");
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [archiveCleanupEnabled, setArchiveCleanupEnabled] = useState(false);
+  const [archiveCleanupDays, setArchiveCleanupDays] = useState("10");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const isCleaner = role === "Cleaner";
@@ -52,6 +55,8 @@ export function SettingsPage() {
     setCompanyName(company.name);
     setLogoUrl(company.logoUrl);
     setSelectedPalette(company.colorPalette);
+    setArchiveCleanupEnabled(company.archiveCleanupEnabled);
+    setArchiveCleanupDays(String(company.archiveCleanupDays || 10));
   }, [company]);
 
   useEffect(() => {
@@ -147,6 +152,26 @@ export function SettingsPage() {
     },
   });
 
+  const archiveCleanupMutation = useMutation({
+    mutationFn: async (input: { enabled: boolean; days: number }) => {
+      if (!companyId) {
+        throw new Error("Missing company context");
+      }
+
+      return updateArchiveCleanupSettings(companyId, input);
+    },
+    onSuccess: async (updatedCompany) => {
+      setArchiveCleanupEnabled(updatedCompany.archiveCleanupEnabled);
+      setArchiveCleanupDays(String(updatedCompany.archiveCleanupDays || 10));
+      await queryClient.invalidateQueries({ queryKey: ["company-settings", companyId] });
+    },
+    onError: (error) => {
+      notify({ tone: "error", title: "Could not update archive cleanup", message: error instanceof Error ? error.message : "Unknown error" });
+      setArchiveCleanupEnabled(company?.archiveCleanupEnabled ?? false);
+      setArchiveCleanupDays(String(company?.archiveCleanupDays || 10));
+    },
+  });
+
   function handleLogoChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
     event.target.value = "";
@@ -173,6 +198,18 @@ export function SettingsPage() {
       URL.revokeObjectURL(logoPreviewUrl);
       setLogoPreviewUrl(null);
     }
+  }
+
+  function normalizeArchiveCleanupDays(value: string) {
+    const digits = value.replace(/\D/g, "").slice(0, 3);
+    const parsed = Number(digits || 10);
+    return String(Math.min(Math.max(parsed, 1), 999));
+  }
+
+  function saveArchiveCleanupSettings(enabled: boolean, daysValue: string) {
+    const normalizedDays = normalizeArchiveCleanupDays(daysValue);
+    setArchiveCleanupDays(normalizedDays);
+    archiveCleanupMutation.mutate({ enabled, days: Number(normalizedDays) });
   }
 
   const isLoading = (!isCleaner && isLoadingCompany) || isLoadingProfile;
@@ -316,20 +353,57 @@ export function SettingsPage() {
       </div>
 
       {canManagePreloadedDuties ? (
-        <Card className="space-y-5 p-5">
-          <SectionTitle
-            title="Preloaded Duties"
-            description="Manage reusable duties that can be selected while creating new work."
-          />
-          <div className="flex flex-wrap gap-3">
-            <Button type="button" variant="secondary" onClick={() => navigate("/settings/preloaded-duties")}>
-              View Duties
-            </Button>
-            <Button type="button" onClick={() => navigate("/settings/preloaded-duties?create=1")}>
-              Create New
-            </Button>
-          </div>
-        </Card>
+        <div className="space-y-6">
+          <Card className="space-y-4 p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <Toggle
+                size="md"
+                label="Delete archived duties"
+                isSelected={archiveCleanupEnabled}
+                isDisabled={archiveCleanupMutation.isPending || isLoadingCompany}
+                onChange={(isSelected) => {
+                  setArchiveCleanupEnabled(isSelected);
+                  const nextDays = isSelected ? archiveCleanupDays || "10" : archiveCleanupDays;
+                  saveArchiveCleanupSettings(isSelected, nextDays);
+                }}
+              />
+              {archiveCleanupMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : null}
+            </div>
+
+            {archiveCleanupEnabled ? (
+              <div className="grid max-w-xs gap-2">
+                <label className="text-sm font-medium text-slate-700">Days to keep archived duties</label>
+                <Input
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={3}
+                  value={archiveCleanupDays}
+                  onChange={(event) => {
+                    const digits = event.target.value.replace(/\D/g, "").slice(0, 3);
+                    setArchiveCleanupDays(digits);
+                  }}
+                  onBlur={() => saveArchiveCleanupSettings(true, archiveCleanupDays || "10")}
+                  disabled={archiveCleanupMutation.isPending}
+                />
+              </div>
+            ) : null}
+          </Card>
+
+          <Card className="space-y-5 p-5">
+            <SectionTitle
+              title="Preloaded Duties"
+              description="Manage reusable duties that can be selected while creating new work."
+            />
+            <div className="flex flex-wrap gap-3">
+              <Button type="button" variant="secondary" onClick={() => navigate("/settings/preloaded-duties")}>
+                View Duties
+              </Button>
+              <Button type="button" onClick={() => navigate("/settings/preloaded-duties?create=1")}>
+                Create New
+              </Button>
+            </div>
+          </Card>
+        </div>
       ) : null}
 
       <Card className="space-y-5 p-5">
