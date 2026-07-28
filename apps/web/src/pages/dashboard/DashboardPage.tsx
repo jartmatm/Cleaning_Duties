@@ -105,11 +105,36 @@ function getTime(dateValue: string | null) {
   return Number.isNaN(time) ? null : time;
 }
 
-function isSameShiftWindow(duty: DutyItem, startsAt: number, dueDate: number | null) {
-  const dutyStart = getTime(duty.startsAt);
-  const dutyEnd = getTime(duty.dueDate);
+function padDatePart(value: number) {
+  return String(value).padStart(2, "0");
+}
 
-  return dutyStart === startsAt && (dueDate === null || dutyEnd === dueDate);
+function getLocalDateKey(date: Date) {
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+}
+
+function getShiftDateTimeKey(startsAt: string | null, dueDate: string | null) {
+  if (!startsAt || !dueDate) {
+    return null;
+  }
+
+  const start = new Date(startsAt);
+  const end = new Date(dueDate);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return null;
+  }
+
+  const startDate = getLocalDateKey(start);
+  const endDate = getLocalDateKey(end);
+  const startTime = start.toTimeString().slice(0, 5);
+  const endTime = end.toTimeString().slice(0, 5);
+
+  return `${startDate}|${startTime}|${endDate}|${endTime}`;
+}
+
+function getDutyShiftDateTimeKey(duty: DutyItem) {
+  return getShiftDateTimeKey(duty.startsAt, duty.dueDate);
 }
 
 function getCleanerProgressDuties(siteDuties: DutyItem[]) {
@@ -126,20 +151,13 @@ function getCleanerProgressDuties(siteDuties: DutyItem[]) {
     .sort((a, b) => (getTime(a.startsAt) ?? 0) - (getTime(b.startsAt) ?? 0))[0];
 
   if (activeShiftDuty) {
-    const shiftStart = getTime(activeShiftDuty.startsAt) ?? now;
-    const shiftEnd = getTime(activeShiftDuty.dueDate);
+    const activeShiftKey = getDutyShiftDateTimeKey(activeShiftDuty);
 
-    return siteDuties.filter((duty) => {
-      if (isSameShiftWindow(duty, shiftStart, shiftEnd) && ["Pending", "In Progress", "Completed"].includes(duty.status)) {
-        return true;
-      }
-
-      const completedAt = getTime(duty.completedAt);
-      return duty.status === "Completed"
-        && completedAt !== null
-        && completedAt >= shiftStart
-        && (shiftEnd === null || completedAt <= shiftEnd);
-    });
+    return siteDuties.filter((duty) =>
+      activeShiftKey !== null
+      && getDutyShiftDateTimeKey(duty) === activeShiftKey
+      && ["Pending", "In Progress", "Completed"].includes(duty.status),
+    );
   }
 
   const nextScheduledDuty = siteDuties
@@ -154,9 +172,12 @@ function getCleanerProgressDuties(siteDuties: DutyItem[]) {
     return [];
   }
 
-  const nextStart = getTime(nextScheduledDuty.startsAt) ?? 0;
-  const nextEnd = getTime(nextScheduledDuty.dueDate);
-  return siteDuties.filter((duty) => duty.status === "Scheduled" && isSameShiftWindow(duty, nextStart, nextEnd));
+  const nextShiftKey = getDutyShiftDateTimeKey(nextScheduledDuty);
+  return siteDuties.filter((duty) =>
+    nextShiftKey !== null
+    && duty.status === "Scheduled"
+    && getDutyShiftDateTimeKey(duty) === nextShiftKey,
+  );
 }
 
 function formatSiteShift(site: SiteItem | null | undefined) {
