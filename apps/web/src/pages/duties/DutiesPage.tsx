@@ -14,7 +14,7 @@ import { PageHeader } from "../../components/common/page-header";
 import { SectionTitle } from "../../components/common/section-title";
 import { ConfirmationDialog } from "../../components/common/confirmation-dialog";
 import { listMySites, listSites, type SiteItem } from "../../services/sites-service";
-import { createDuty, deleteDuty, listAssignedDuties, listDuties, type DutyItem, updateDuty, updateDutyStatus } from "../../services/duties-service";
+import { createDraftDuty, createDuty, deleteDuty, listAssignedDuties, listDuties, type DutyItem, updateDraftDuty, updateDuty, updateDutyStatus } from "../../services/duties-service";
 import { listAssignableMembers, type AssigneeOption } from "../../services/assignments-service";
 import { useSession } from "../../hooks/use-session";
 import { dutyFormSchema, type DutyFormInput, DUTY_PRIORITIES, DUTY_STATUSES } from "@cleaning-duties/shared";
@@ -43,7 +43,6 @@ type ManagerStatusFilter = DutyItem["status"] | "All";
 const CLEANER_DUTY_FILTERS: CleanerDutyFilter[] = ["Pending", "In Progress", "Completed", "Incomplete", "All"];
 const MANAGER_PRIORITY_FILTERS: ManagerPriorityFilter[] = ["All", ...DUTY_PRIORITIES];
 const MANAGER_STATUS_FILTERS: ManagerStatusFilter[] = ["All", ...DUTY_STATUSES];
-const EDITABLE_DUTY_STATUSES = DUTY_STATUSES.filter((status) => status !== "Archived" && status !== "Missed");
 const RECURRENCE_OPTIONS = [
   { value: "daily", label: "Daily" },
   { value: "weekly", label: "Weekly" },
@@ -376,17 +375,17 @@ export function DutiesPage() {
   }, []);
 
   const createMutation = useMutation({
-    mutationFn: (values: DutyFormInput) => {
+    mutationFn: ({ values, draft }: { values: DutyFormInput; draft?: boolean }) => {
       if (!activeSiteId || !userId) {
         throw new Error("Missing duty context");
       }
 
-      return createDuty(activeSiteId, userId, values);
+      return draft ? createDraftDuty(activeSiteId, userId, values) : createDuty(activeSiteId, userId, values);
     },
-    onSuccess: async (_createdDuty, values) => {
+    onSuccess: async (_createdDuty, { values, draft }) => {
       let preloadedDutyCreated = false;
 
-      if (saveAsPreloadedDuty && companyId && userId) {
+      if (!draft && saveAsPreloadedDuty && companyId && userId) {
         try {
           await createPreloadedDuty(companyId, userId, values);
           preloadedDutyCreated = true;
@@ -410,8 +409,8 @@ export function DutiesPage() {
       form.reset();
       notify({
         tone: "success",
-        title: "Duty created",
-        message: preloadedDutyCreated ? "The duty was saved and added to preloaded duties." : "The duty was saved successfully.",
+        title: draft ? "Draft saved" : "Duty created",
+        message: draft ? "The duty was saved as a draft." : preloadedDutyCreated ? "The duty was saved and added to preloaded duties." : "The duty was saved successfully.",
       });
     },
     onError: (error) => {
@@ -420,14 +419,14 @@ export function DutiesPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ dutyId, values }: { dutyId: string; values: DutyFormInput }) => updateDuty(dutyId, values),
-    onSuccess: async (_updatedDuty, { values }) => {
+    mutationFn: ({ dutyId, values, draft }: { dutyId: string; values: DutyFormInput; draft?: boolean }) => draft ? updateDraftDuty(dutyId, values) : updateDuty(dutyId, values),
+    onSuccess: async (_updatedDuty, { values, draft }) => {
       let preloadedDutyAction: "created" | "updated" | "removed" | null = null;
       const matchingTemplate = linkedPreloadedDutyId
         ? preloadedDuties.find((template) => template.id === linkedPreloadedDutyId) ?? null
         : findMatchingPreloadedDuty(preloadedDuties, editingDuty?.title ?? values.title);
 
-      if (companyId && userId) {
+      if (!draft && companyId && userId) {
         try {
           if (saveAsPreloadedDuty && matchingTemplate) {
             await updatePreloadedDuty(matchingTemplate.id, values);
@@ -458,14 +457,16 @@ export function DutiesPage() {
       setLinkedPreloadedDutyId(null);
       setReferencePhotoItems([]);
       form.reset();
-      const successMessage = preloadedDutyAction === "created"
+      const successMessage = draft
+        ? "The duty was saved as a draft."
+        : preloadedDutyAction === "created"
         ? "The duty was updated and added to preloaded duties."
         : preloadedDutyAction === "updated"
           ? "The duty and its preloaded version were updated."
           : preloadedDutyAction === "removed"
             ? "The duty was updated and removed from preloaded duties."
             : "The duty changes were saved successfully.";
-      notify({ tone: "success", title: "Duty updated", message: successMessage });
+      notify({ tone: "success", title: draft ? "Draft saved" : "Duty updated", message: successMessage });
     },
     onError: (error) => {
       notify({ tone: "error", title: "Could not update duty", message: error instanceof Error ? error.message : "Unknown error" });
@@ -747,33 +748,33 @@ export function DutiesPage() {
     });
   }
 
-  async function onSubmit(values: DutyFormInput) {
+  async function onSubmit(values: DutyFormInput, draft = false) {
     if (referencePhotoItems.some((photo) => photo.status === "uploading")) {
       notify({ tone: "error", title: "Photos still uploading", message: "Wait for uploads to finish before saving the duty." });
       return;
     }
 
-    if (values.priority === "Periodical" && values.recurringPattern === "weekly" && normalizeWeekdays(values.recurringWeekdays).length === 0) {
+    if (!draft && values.priority === "Periodical" && values.recurringPattern === "weekly" && normalizeWeekdays(values.recurringWeekdays).length === 0) {
       notify({ tone: "error", title: "Select weekdays", message: "Choose at least one weekday for weekly duties." });
       return;
     }
 
-    if (values.priority === "Periodical" && !values.dueDate) {
+    if (!draft && values.priority === "Periodical" && !values.dueDate) {
       notify({ tone: "error", title: "Set the first execution date", message: "Periodical duties need a first execution date." });
       return;
     }
 
-    if (values.dueDate && (!activeSite?.shiftStartTime || !activeSite.shiftEndTime)) {
+    if (!draft && values.dueDate && (!activeSite?.shiftStartTime || !activeSite.shiftEndTime)) {
       notify({ tone: "error", title: "Set site shift hours", message: "Edit this site and add shift start and end times before scheduling duties." });
       return;
     }
 
     if (editingDuty) {
-      await updateMutation.mutateAsync({ dutyId: editingDuty.id, values });
+      await updateMutation.mutateAsync({ dutyId: editingDuty.id, values, draft });
       return;
     }
 
-    await createMutation.mutateAsync(values);
+    await createMutation.mutateAsync({ values, draft });
   }
 
   function scrollToDutyList() {
@@ -1013,7 +1014,7 @@ export function DutiesPage() {
             </div>
           </div>
 
-          <form className="grid gap-4 lg:grid-cols-2" onSubmit={form.handleSubmit(onSubmit)}>
+          <form className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-2 lg:col-span-2">
               <label className="text-sm font-medium">Title</label>
               <div ref={preloadedSuggestionRef} className="relative">
@@ -1064,16 +1065,6 @@ export function DutiesPage() {
                 {DUTY_PRIORITIES.map((priority) => (
                   <option key={priority} value={priority}>
                     {priority}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Status</label>
-              <select {...form.register("status")} className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm">
-                {EDITABLE_DUTY_STATUSES.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
                   </option>
                 ))}
               </select>
@@ -1221,7 +1212,20 @@ export function DutiesPage() {
               </div>
             </div>
             <div className="flex gap-3 lg:col-span-2">
-              <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={createMutation.isPending || updateMutation.isPending}
+                onClick={form.handleSubmit((values) => onSubmit(values, true))}
+              >
+                {createMutation.isPending || updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Save
+              </Button>
+              <Button
+                type="button"
+                disabled={createMutation.isPending || updateMutation.isPending}
+                onClick={form.handleSubmit((values) => onSubmit(values))}
+              >
                 {createMutation.isPending && !editingDuty ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />

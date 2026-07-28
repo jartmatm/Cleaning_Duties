@@ -292,11 +292,19 @@ export async function listAssignedDuties(profileId: string, advanceSchedule = tr
 }
 
 export async function createDuty(siteId: string, createdBy: string, values: DutyFormInput) {
+  return createDutyWithOptions(siteId, createdBy, values);
+}
+
+export async function createDraftDuty(siteId: string, createdBy: string, values: DutyFormInput) {
+  return createDutyWithOptions(siteId, createdBy, values, { draft: true });
+}
+
+async function createDutyWithOptions(siteId: string, createdBy: string, values: DutyFormInput, options: { draft?: boolean } = {}) {
   const payload = await toFormInput(siteId, values);
   const now = new Date();
   const startsAt = payload.startsAt ? new Date(payload.startsAt) : null;
   const dueDate = payload.dueDate ? new Date(payload.dueDate) : null;
-  const status: DutyStatus = dueDate && dueDate <= now
+  const status: DutyStatus = options.draft ? "Draft" : dueDate && dueDate <= now
     ? "Missed"
     : startsAt && startsAt <= now
       ? "Pending"
@@ -330,15 +338,31 @@ export async function createDuty(siteId: string, createdBy: string, values: Duty
 }
 
 export async function updateDuty(dutyId: string, values: DutyFormInput) {
+  return updateDutyWithOptions(dutyId, values);
+}
+
+export async function updateDraftDuty(dutyId: string, values: DutyFormInput) {
+  return updateDutyWithOptions(dutyId, values, { draft: true });
+}
+
+async function updateDutyWithOptions(dutyId: string, values: DutyFormInput, options: { draft?: boolean } = {}) {
   const siteId = await getDutySiteId(dutyId);
   const payload = await toFormInput(siteId, values);
+  const now = new Date();
+  const startsAt = payload.startsAt ? new Date(payload.startsAt) : null;
+  const dueDate = payload.dueDate ? new Date(payload.dueDate) : null;
+  const status: DutyStatus = options.draft ? "Draft" : dueDate && dueDate <= now
+    ? "Missed"
+    : startsAt && startsAt <= now
+      ? "Pending"
+      : "Scheduled";
   const { data, error } = await supabase
     .from("cleaning_duties")
     .update({
       title: payload.title,
       description: payload.description,
       priority: payload.priority,
-      status: payload.status,
+      status,
       starts_at: payload.startsAt,
       due_date: payload.dueDate,
       recurring: payload.recurring,
