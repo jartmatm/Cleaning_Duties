@@ -123,6 +123,58 @@ function buildRecurringRule(values: { priority: DutyRow["priority"]; recurringPa
   return JSON.stringify({ pattern, interval, weekday: values.recurringWeekday ?? 1, weekdays: values.recurringWeekdays?.length ? values.recurringWeekdays : [1] });
 }
 
+function buildSiteShiftWindow(dateValue: string, shiftStartTime: string | null, shiftEndTime: string | null) {
+  if (!dateValue || !shiftStartTime || !shiftEndTime) {
+    return { startsAt: null, dueDate: dateValue ? new Date(dateValue).toISOString() : null };
+  }
+
+  const [datePart] = dateValue.split("T");
+  const start = new Date(`${datePart}T${shiftStartTime}`);
+  const end = new Date(`${datePart}T${shiftEndTime}`);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return { startsAt: null, dueDate: new Date(dateValue).toISOString() };
+  }
+
+  if (end <= start) {
+    end.setDate(end.getDate() + 1);
+  }
+
+  return { startsAt: start.toISOString(), dueDate: end.toISOString() };
+}
+
+async function getSiteShift(siteId: string) {
+  const { data, error } = await supabase
+    .from("sites")
+    .select("shift_start_time, shift_end_time")
+    .eq("id", siteId)
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const row = data as { shift_start_time: string | null; shift_end_time: string | null };
+  return {
+    shiftStartTime: row.shift_start_time?.slice(0, 5) ?? null,
+    shiftEndTime: row.shift_end_time?.slice(0, 5) ?? null,
+  };
+}
+
+async function getDutySiteId(dutyId: string) {
+  const { data, error } = await supabase
+    .from("cleaning_duties")
+    .select("site_id")
+    .eq("id", dutyId)
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data as { site_id: string }).site_id;
+}
+
 async function advanceDutySchedule(duties: DutyItem[]) {
   const now = new Date();
   let advanced = false;
@@ -150,8 +202,10 @@ async function advanceDutySchedule(duties: DutyItem[]) {
   return advanced;
 }
 
-function toFormInput(values: DutyFormInput) {
+async function toFormInput(siteId: string, values: DutyFormInput) {
   const parsed = dutyFormSchema.parse(values);
+  const siteShift = await getSiteShift(siteId);
+  const shiftWindow = buildSiteShiftWindow(parsed.dueDate || parsed.startDate || "", siteShift.shiftStartTime, siteShift.shiftEndTime);
   const recurringRule = buildRecurringRule({
     priority: parsed.priority,
     recurringPattern: parsed.recurringPattern,
@@ -165,8 +219,8 @@ function toFormInput(values: DutyFormInput) {
     description: parsed.description,
     priority: parsed.priority,
     status: parsed.status,
-    startsAt: parsed.startDate ? new Date(parsed.startDate).toISOString() : null,
-    dueDate: parsed.dueDate ? new Date(parsed.dueDate).toISOString() : null,
+    startsAt: shiftWindow.startsAt,
+    dueDate: shiftWindow.dueDate,
     recurring: parsed.priority === "Periodical",
     recurring_rule: recurringRule,
     equipment: parseCsvList(parsed.equipment),
@@ -229,7 +283,7 @@ export async function listAssignedDuties(profileId: string, advanceSchedule = tr
 }
 
 export async function createDuty(siteId: string, createdBy: string, values: DutyFormInput) {
-  const payload = toFormInput(values);
+  const payload = await toFormInput(siteId, values);
   const { data, error } = await supabase
     .from("cleaning_duties")
     .insert({
@@ -259,7 +313,8 @@ export async function createDuty(siteId: string, createdBy: string, values: Duty
 }
 
 export async function updateDuty(dutyId: string, values: DutyFormInput) {
-  const payload = toFormInput(values);
+  const siteId = await getDutySiteId(dutyId);
+  const payload = await toFormInput(siteId, values);
   const { data, error } = await supabase
     .from("cleaning_duties")
     .update({

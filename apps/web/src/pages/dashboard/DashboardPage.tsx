@@ -92,6 +92,10 @@ function isInTodaysShiftWindow(duty: DutyItem) {
   return isToday(duty.startsAt) || isToday(duty.dueDate);
 }
 
+function formatSiteShift(site: SiteItem | null | undefined) {
+  return site?.shiftStartTime && site.shiftEndTime ? `${site.shiftStartTime} - ${site.shiftEndTime}` : "No site shift";
+}
+
 function percent(value: number, total: number) {
   if (total === 0) {
     return 0;
@@ -227,10 +231,9 @@ function ManagerDashboard() {
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
                       <span>{item.priority}</span>
                       <span aria-hidden="true">·</span>
-                      <span>
-                        {item.startsAt ? new Date(item.startsAt).toLocaleString() : "No shift start"}
-                        {item.dueDate ? ` - ${new Date(item.dueDate).toLocaleString()}` : ""}
-                      </span>
+                      <span>{formatSiteShift(activeSite)}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{item.dueDate ? new Date(item.dueDate).toLocaleDateString() : "No execution date"}</span>
                       <DutyStatusBadge status={item.status} />
                     </div>
                   </div>
@@ -583,7 +586,7 @@ function DutyList(props: {
           <div>
             <p className="font-medium text-slate-950">{duty.title}</p>
             <p className="mt-1 text-sm text-slate-500">
-              {props.sites.get(duty.siteId)?.name ?? "Assigned site"} · {duty.priority} · {duty.dueDate ? new Date(duty.dueDate).toLocaleString() : "No due date"}
+              {props.sites.get(duty.siteId)?.name ?? "Assigned site"} · {duty.priority} · {formatSiteShift(props.sites.get(duty.siteId))} · {duty.dueDate ? new Date(duty.dueDate).toLocaleDateString() : "No execution date"}
             </p>
             <DutyStatusBadge status={duty.status} className="mt-2" />
           </div>

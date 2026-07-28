@@ -6,6 +6,8 @@ export type SiteRecord = {
   name: string;
   address: string | null;
   notes: string;
+  shiftStartTime: string | null;
+  shiftEndTime: string | null;
   createdAt: string;
   updatedAt: string;
 };

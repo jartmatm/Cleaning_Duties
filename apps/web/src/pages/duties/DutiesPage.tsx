@@ -220,6 +220,14 @@ function toDateTimeLocalValue(dateValue: string | null) {
   return new Date(date.getTime() - timezoneOffsetMs).toISOString().slice(0, 16);
 }
 
+function toDateInputValue(dateValue: string | null) {
+  return toDateTimeLocalValue(dateValue).slice(0, 10);
+}
+
+function formatSiteShift(site: SiteItem | null) {
+  return site?.shiftStartTime && site.shiftEndTime ? `${site.shiftStartTime} - ${site.shiftEndTime}` : "No site shift hours set";
+}
+
 function matchesDutyDateRange(duty: DutyItem, dateFrom: string, dateTo: string) {
   if (!dateFrom && !dateTo) {
     return true;
@@ -334,7 +342,6 @@ export function DutiesPage() {
   });
   const watchedTitle = form.watch("title");
   const watchedPriority = form.watch("priority");
-  const watchedStartDate = form.watch("startDate");
   const watchedDueDate = form.watch("dueDate");
   const watchedRecurringPattern = form.watch("recurringPattern");
   const watchedRecurringInterval = form.watch("recurringInterval");
@@ -616,7 +623,7 @@ export function DutiesPage() {
       priority: duty.priority,
       status: duty.status,
       startDate: toDateTimeLocalValue(duty.startsAt),
-      dueDate: toDateTimeLocalValue(duty.dueDate),
+      dueDate: toDateInputValue(duty.dueDate),
       recurringPattern: recurringRule.pattern,
       recurringInterval: recurringRule.interval,
       recurringWeekday: recurringRule.weekday,
@@ -748,13 +755,13 @@ export function DutiesPage() {
       return;
     }
 
-    if (values.priority === "Periodical" && (!values.startDate || !values.dueDate)) {
-      notify({ tone: "error", title: "Set the shift window", message: "Periodical duties need both a shift start and shift end." });
+    if (values.priority === "Periodical" && !values.dueDate) {
+      notify({ tone: "error", title: "Set the first execution date", message: "Periodical duties need a first execution date." });
       return;
     }
 
-    if (values.startDate && values.dueDate && new Date(values.startDate) >= new Date(values.dueDate)) {
-      notify({ tone: "error", title: "Invalid shift window", message: "Shift end must be later than shift start." });
+    if (values.dueDate && (!activeSite?.shiftStartTime || !activeSite.shiftEndTime)) {
+      notify({ tone: "error", title: "Set site shift hours", message: "Edit this site and add shift start and end times before scheduling duties." });
       return;
     }
 
@@ -1069,12 +1076,14 @@ export function DutiesPage() {
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Shift start</label>
-              <Input type="datetime-local" {...form.register("startDate")} />
+              <label className="text-sm font-medium">First execution date</label>
+              <Input type="date" {...form.register("dueDate")} />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Shift end (due date)</label>
-              <Input type="datetime-local" min={watchedStartDate || undefined} {...form.register("dueDate")} />
+              <label className="text-sm font-medium">Site shift hours</label>
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+                {formatSiteShift(activeSite)}
+              </div>
             </div>
             {watchedPriority === "Periodical" ? (
               <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:col-span-2">
@@ -1118,7 +1127,7 @@ export function DutiesPage() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-500">Select the shift end to preview the upcoming dates.</p>
+                  <p className="text-sm text-slate-500">Select the first execution date to preview the upcoming dates.</p>
                 )}
               </div>
             ) : null}
@@ -1340,10 +1349,10 @@ export function DutiesPage() {
                 <div className="flex flex-wrap gap-2 text-xs font-medium text-slate-600">
                   <span className="rounded-full bg-slate-50 px-3 py-1 ring-1 ring-slate-200">{duty.priority}</span>
                   <span className="rounded-full bg-slate-50 px-3 py-1 ring-1 ring-slate-200">
-                    {duty.startsAt ? `Starts ${new Date(duty.startsAt).toLocaleString()}` : "No shift start"}
+                    {formatSiteShift(activeSite)}
                   </span>
                   <span className="rounded-full bg-slate-50 px-3 py-1 ring-1 ring-slate-200">
-                    {duty.dueDate ? `Ends ${new Date(duty.dueDate).toLocaleString()}` : "No shift end"}
+                    {duty.dueDate ? `Next ${new Date(duty.dueDate).toLocaleDateString()}` : "No execution date"}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-end justify-between gap-3">

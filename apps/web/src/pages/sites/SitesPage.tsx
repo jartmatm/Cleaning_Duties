@@ -15,6 +15,23 @@ import { createSite, deleteSite, listMySites, listSites, type SiteItem, updateSi
 import { useSession } from "../../hooks/use-session";
 import { notify } from "../../components/common/toast";
 
+function formatSiteShift(site: SiteItem) {
+  if (!site.shiftStartTime || !site.shiftEndTime) {
+    return "No shift hours set";
+  }
+
+  const [startHour = "0", startMinute = "0"] = site.shiftStartTime.split(":");
+  const [endHour = "0", endMinute = "0"] = site.shiftEndTime.split(":");
+  const startTotal = Number(startHour) * 60 + Number(startMinute);
+  const endTotal = Number(endHour) * 60 + Number(endMinute);
+  const durationMinutes = (endTotal - startTotal + 24 * 60) % (24 * 60);
+  const hours = Math.floor(durationMinutes / 60);
+  const minutes = durationMinutes % 60;
+  const duration = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+
+  return `${site.shiftStartTime} - ${site.shiftEndTime} (${duration})`;
+}
+
 export function SitesPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -38,6 +55,8 @@ export function SitesPage() {
       name: "",
       address: "",
       notes: "",
+      shiftStartTime: "",
+      shiftEndTime: "",
     },
   });
 
@@ -91,7 +110,7 @@ export function SitesPage() {
   function startCreate() {
     setEditingSite(null);
     setShowCreate(true);
-    form.reset({ name: "", address: "", notes: "" });
+    form.reset({ name: "", address: "", notes: "", shiftStartTime: "", shiftEndTime: "" });
   }
 
   useEffect(() => {
@@ -113,6 +132,8 @@ export function SitesPage() {
       name: site.name,
       address: site.address ?? "",
       notes: site.notes,
+      shiftStartTime: site.shiftStartTime ?? "",
+      shiftEndTime: site.shiftEndTime ?? "",
     });
   }
 
@@ -187,7 +208,7 @@ export function SitesPage() {
                 onClick={() => {
                   setShowCreate(false);
                   setEditingSite(null);
-                  form.reset({ name: "", address: "", notes: "" });
+                  form.reset({ name: "", address: "", notes: "", shiftStartTime: "", shiftEndTime: "" });
                 }}
                 disabled={createMutation.isPending || updateMutation.isPending}
               >
@@ -202,6 +223,13 @@ export function SitesPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Address</label>
               <Input {...form.register("address")} placeholder="123 Collins St, Melbourne" />
+            </div>
+            <div className="space-y-2 lg:col-span-2">
+              <label className="text-sm font-medium">Site shift hours</label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input type="time" {...form.register("shiftStartTime")} />
+                <Input type="time" {...form.register("shiftEndTime")} />
+              </div>
             </div>
             <div className="space-y-2 lg:col-span-2">
               <label className="text-sm font-medium">Notes</label>
@@ -237,7 +265,7 @@ export function SitesPage() {
                 onClick={() => {
                   setShowCreate(false);
                   setEditingSite(null);
-                  form.reset({ name: "", address: "", notes: "" });
+                  form.reset({ name: "", address: "", notes: "", shiftStartTime: "", shiftEndTime: "" });
                 }}
               >
                 Cancel
@@ -290,6 +318,9 @@ export function SitesPage() {
                   <p className="mt-1 text-sm text-slate-500">{site.address || "No address set"}</p>
                 </div>
                 <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">Active</div>
+              </div>
+              <div className="rounded-md bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600 ring-1 ring-slate-200">
+                {formatSiteShift(site)}
               </div>
               <p className="text-sm text-slate-600 line-clamp-3">{site.notes || "No notes."}</p>
               {!isCleaner ? (

@@ -20,6 +20,10 @@ type CleanerDutyDetailModalProps = {
   onCompleted?: (duty: DutyItem) => void;
 };
 
+function formatSiteShift(site: SiteItem | null) {
+  return site?.shiftStartTime && site.shiftEndTime ? `${site.shiftStartTime} - ${site.shiftEndTime}` : "No site shift hours set";
+}
+
 export function CleanerDutyDetailModal({ duty, site, userId, onClose, onCompleted }: CleanerDutyDetailModalProps) {
   const queryClient = useQueryClient();
   const { companyPalette } = useSession();
@@ -169,7 +173,8 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           <InfoBlock label="Priority" value={duty.priority} />
-          <InfoBlock label="Due date" value={duty.dueDate ? new Date(duty.dueDate).toLocaleString() : "No due date"} />
+          <InfoBlock label="Execution date" value={duty.dueDate ? new Date(duty.dueDate).toLocaleDateString() : "No date set"} />
+          <InfoBlock label="Site shift" value={formatSiteShift(site)} />
           <InfoBlock label="Equipment" value={duty.equipment.length ? duty.equipment.join(", ") : "None listed"} />
         </div>
 

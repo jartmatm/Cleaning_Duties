@@ -9,6 +9,8 @@ export type SiteRow = {
   notes: string;
   info_photos: string[];
   storage_bucket: string;
+  shift_start_time: string | null;
+  shift_end_time: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -21,6 +23,8 @@ export type SiteItem = {
   notes: string;
   infoPhotos: string[];
   storageBucket: string;
+  shiftStartTime: string | null;
+  shiftEndTime: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -34,13 +38,15 @@ function mapSite(row: SiteRow): SiteItem {
     notes: row.notes,
     infoPhotos: row.info_photos ?? [],
     storageBucket: row.storage_bucket || `site-${row.id}`,
+    shiftStartTime: row.shift_start_time?.slice(0, 5) ?? null,
+    shiftEndTime: row.shift_end_time?.slice(0, 5) ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
 export async function listSites(companyId: string, search = "") {
-  let query = supabase.from("sites").select("id, company_id, name, address, notes, info_photos, storage_bucket, created_at, updated_at").eq("company_id", companyId);
+  let query = supabase.from("sites").select("id, company_id, name, address, notes, info_photos, storage_bucket, shift_start_time, shift_end_time, created_at, updated_at").eq("company_id", companyId);
 
   if (search.trim()) {
     query = query.ilike("name", `%${search.trim()}%`);
@@ -58,7 +64,7 @@ export async function listSites(companyId: string, search = "") {
 export async function listMySites(profileId: string, search = "") {
   let query = supabase
     .from("site_members")
-    .select("sites(id, company_id, name, address, notes, info_photos, storage_bucket, created_at, updated_at)")
+    .select("sites(id, company_id, name, address, notes, info_photos, storage_bucket, shift_start_time, shift_end_time, created_at, updated_at)")
     .eq("profile_id", profileId);
 
   const { data, error } = await query;
@@ -87,8 +93,10 @@ export async function createSite(companyId: string, input: SiteFormInput) {
       name: parsed.name,
       address: parsed.address || null,
       notes: parsed.notes,
+      shift_start_time: parsed.shiftStartTime || null,
+      shift_end_time: parsed.shiftEndTime || null,
     })
-    .select("id, company_id, name, address, notes, info_photos, storage_bucket, created_at, updated_at")
+    .select("id, company_id, name, address, notes, info_photos, storage_bucket, shift_start_time, shift_end_time, created_at, updated_at")
     .single();
 
   if (error) {
@@ -107,9 +115,11 @@ export async function updateSite(siteId: string, input: SiteFormInput) {
       name: parsed.name,
       address: parsed.address || null,
       notes: parsed.notes,
+      shift_start_time: parsed.shiftStartTime || null,
+      shift_end_time: parsed.shiftEndTime || null,
     })
     .eq("id", siteId)
-    .select("id, company_id, name, address, notes, info_photos, storage_bucket, created_at, updated_at")
+    .select("id, company_id, name, address, notes, info_photos, storage_bucket, shift_start_time, shift_end_time, created_at, updated_at")
     .single();
 
   if (error) {
@@ -145,7 +155,7 @@ export async function updateSiteInformation(siteId: string, input: { notes: stri
       updated_at: new Date().toISOString(),
     })
     .eq("id", siteId)
-    .select("id, company_id, name, address, notes, info_photos, storage_bucket, created_at, updated_at")
+    .select("id, company_id, name, address, notes, info_photos, storage_bucket, shift_start_time, shift_end_time, created_at, updated_at")
     .single();
 
   if (error) {
