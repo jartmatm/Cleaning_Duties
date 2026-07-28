@@ -155,6 +155,7 @@ export function ReportsPage() {
   const [mediaRange, setMediaRange] = useState<DateRange>({ dateFrom: todayValue(), dateTo: todayValue() });
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
   const [preparedMediaFiles, setPreparedMediaFiles] = useState<PreparedMediaFile[]>([]);
+  const [excludedReportPhotos, setExcludedReportPhotos] = useState<string[]>([]);
   const [isPreparingMedia, setIsPreparingMedia] = useState(false);
   const [isDownloadingMedia, setIsDownloadingMedia] = useState(false);
   const [mediaPreparationError, setMediaPreparationError] = useState<string | null>(null);
@@ -187,6 +188,11 @@ export function ReportsPage() {
   });
 
   const mediaItems = useMemo(() => mediaFromDuties(duties.filter((duty) => dutyMatchesRange(duty, mediaRange))), [duties, mediaRange]);
+  const previewReport = selectedReport ?? reports[0] ?? null;
+
+  useEffect(() => {
+    setExcludedReportPhotos([]);
+  }, [previewReport?.id]);
 
   useEffect(() => {
     if (!isMediaOpen || mediaItems.length === 0) {
@@ -361,9 +367,13 @@ export function ReportsPage() {
     }
 
     printWindow.document.open();
-    printWindow.document.write(buildReportPrintHtml(report));
+    printWindow.document.write(buildReportPrintHtml(report, report.id === previewReport?.id ? excludedReportPhotos : []));
     printWindow.document.close();
     printWindow.focus();
+  }
+
+  function toggleReportPhoto(photo: string) {
+    setExcludedReportPhotos((current) => current.includes(photo) ? current.filter((item) => item !== photo) : [...current, photo]);
   }
 
   return (
@@ -434,7 +444,7 @@ export function ReportsPage() {
           )}
         </Card>
 
-        <ReportPreview report={selectedReport ?? reports[0] ?? null} />
+        <ReportPreview report={previewReport} excludedPhotos={excludedReportPhotos} onRemovePhoto={toggleReportPhoto} />
       </div>
 
       {isCreateOpen ? (
@@ -497,14 +507,17 @@ function escapeHtml(value: string | null | undefined) {
   });
 }
 
-function buildReportPrintHtml(report: ServiceReportItem) {
+function buildReportPrintHtml(report: ServiceReportItem, excludedPhotos: string[] = []) {
   const snapshot = report.snapshot;
+  const excludedPhotoSet = new Set(excludedPhotos);
   const score = snapshot.totalCount > 0 ? Math.round((snapshot.completedCount / snapshot.totalCount) * 100) : 0;
   const reportDate = formatReportRange(snapshot);
   const completedDuties = snapshot.duties.filter(isCompletedReportDuty);
   const dutiesHtml = completedDuties.length === 0
     ? `<p class="muted">No completed duties found for this date range.</p>`
     : completedDuties.map((duty) => {
+      const beforePhotos = duty.beforePhotos.filter((photo) => !excludedPhotoSet.has(photo));
+      const afterPhotos = duty.afterPhotos.filter((photo) => !excludedPhotoSet.has(photo));
       const photoColumn = (title: string, photos: string[]) => {
         const photoRows = Array.from(
           { length: Math.ceil(photos.length / 2) },
@@ -534,10 +547,10 @@ function buildReportPrintHtml(report: ServiceReportItem) {
             <p class="cleaners"><strong>Cleaners:</strong> ${escapeHtml(cleanerAssignmentText(duty.assignedCleanerNames))}</p>
             ${duty.description ? `<p class="description">${escapeHtml(reportDescriptionPreview(duty.description))}</p>` : ""}
           </div>
-          ${duty.beforePhotos.length || duty.afterPhotos.length ? `
+          ${beforePhotos.length || afterPhotos.length ? `
             <div class="photo-grid">
-              ${photoColumn("Before", duty.beforePhotos)}
-              ${photoColumn("After", duty.afterPhotos)}
+              ${photoColumn("Before", beforePhotos)}
+              ${photoColumn("After", afterPhotos)}
             </div>
           ` : ""}
         </section>
@@ -710,7 +723,7 @@ function TimeInput(props: { label: string; value: string; onChange: (value: stri
   );
 }
 
-function ReportPreview({ report }: { report: ServiceReportItem | null }) {
+function ReportPreview({ report, excludedPhotos, onRemovePhoto }: { report: ServiceReportItem | null; excludedPhotos: string[]; onRemovePhoto: (photo: string) => void }) {
   if (!report) {
     return (
       <Card className="p-8 text-center">
@@ -721,6 +734,7 @@ function ReportPreview({ report }: { report: ServiceReportItem | null }) {
   }
 
   const snapshot = report.snapshot;
+  const excludedPhotoSet = new Set(excludedPhotos);
   const score = snapshot.totalCount > 0 ? Math.round((snapshot.completedCount / snapshot.totalCount) * 100) : 0;
   const completedDuties = snapshot.duties.filter(isCompletedReportDuty);
 
@@ -758,21 +772,26 @@ function ReportPreview({ report }: { report: ServiceReportItem | null }) {
             {completedDuties.length === 0 ? (
               <p className="text-slate-500">No completed duties found for this date range.</p>
             ) : (
-              completedDuties.map((duty) => (
-                <div key={duty.id} className="rounded-md border border-slate-200 p-5">
-                  <p className="text-lg font-bold text-slate-950">{duty.title}</p>
-                  <p className="mt-2 text-sm text-slate-500">
-                    <span className="font-semibold text-slate-700">Cleaners:</span> {cleanerAssignmentText(duty.assignedCleanerNames)}
-                  </p>
-                  {duty.description ? <p className="mt-3 text-slate-600">{reportDescriptionPreview(duty.description)}</p> : null}
-                  {duty.beforePhotos.length || duty.afterPhotos.length ? (
-                    <div className="mt-4 space-y-6">
-                      <PhotoStrip title="Before" photos={duty.beforePhotos} />
-                      <PhotoStrip title="After" photos={duty.afterPhotos} />
-                    </div>
-                  ) : null}
-                </div>
-              ))
+              completedDuties.map((duty) => {
+                const beforePhotos = duty.beforePhotos.filter((photo) => !excludedPhotoSet.has(photo));
+                const afterPhotos = duty.afterPhotos.filter((photo) => !excludedPhotoSet.has(photo));
+
+                return (
+                  <div key={duty.id} className="rounded-md border border-slate-200 p-5">
+                    <p className="text-lg font-bold text-slate-950">{duty.title}</p>
+                    <p className="mt-2 text-sm text-slate-500">
+                      <span className="font-semibold text-slate-700">Cleaners:</span> {cleanerAssignmentText(duty.assignedCleanerNames)}
+                    </p>
+                    {duty.description ? <p className="mt-3 text-slate-600">{reportDescriptionPreview(duty.description)}</p> : null}
+                    {duty.beforePhotos.length || duty.afterPhotos.length ? (
+                      <div className="mt-4 space-y-6">
+                        <PhotoStrip title="Before" photos={beforePhotos} onRemovePhoto={onRemovePhoto} />
+                        <PhotoStrip title="After" photos={afterPhotos} onRemovePhoto={onRemovePhoto} />
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
@@ -790,7 +809,7 @@ function ReportRow(props: { label: string; value: string }) {
   );
 }
 
-function PhotoStrip({ title, photos }: { title: string; photos: string[] }) {
+function PhotoStrip({ title, photos, onRemovePhoto }: { title: string; photos: string[]; onRemovePhoto: (photo: string) => void }) {
   if (photos.length === 0) {
     return <div className="rounded-md bg-slate-50 p-4 text-sm text-slate-500">{title}: no photos uploaded.</div>;
   }
@@ -799,8 +818,19 @@ function PhotoStrip({ title, photos }: { title: string; photos: string[] }) {
     <div>
       <p className="mb-2 text-sm font-bold text-slate-600">{title}</p>
       <div className="grid grid-cols-2 gap-3">
-        {photos.map((photo) => (
-          <img key={photo} src={photo} alt="" className="h-48 w-full rounded-md object-cover" />
+        {photos.map((photo, index) => (
+          <div key={`${photo}-${index}`} className="relative overflow-hidden rounded-md">
+            <img src={photo} alt="" className="h-48 w-full object-cover" />
+            <button
+              type="button"
+              onClick={() => onRemovePhoto(photo)}
+              className="absolute right-2 top-2 rounded-full bg-white/95 p-1.5 text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-rose-50 hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-200"
+              aria-label={`Remove ${title.toLowerCase()} photo ${index + 1} from report`}
+              title="Remove photo from report"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         ))}
       </div>
     </div>
