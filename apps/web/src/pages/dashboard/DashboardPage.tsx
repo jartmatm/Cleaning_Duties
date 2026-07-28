@@ -118,7 +118,10 @@ function getCleanerProgressDuties(siteDuties: DutyItem[]) {
     .filter((duty) => {
       const startsAt = getTime(duty.startsAt);
       const dueDate = getTime(duty.dueDate);
-      return startsAt !== null && startsAt <= now && (dueDate === null || dueDate > now);
+      return startsAt !== null
+        && startsAt <= now
+        && (dueDate === null || dueDate > now)
+        && ["Pending", "In Progress", "Completed"].includes(duty.status);
     })
     .sort((a, b) => (getTime(a.startsAt) ?? 0) - (getTime(b.startsAt) ?? 0))[0];
 
@@ -127,7 +130,7 @@ function getCleanerProgressDuties(siteDuties: DutyItem[]) {
     const shiftEnd = getTime(activeShiftDuty.dueDate);
 
     return siteDuties.filter((duty) => {
-      if (isSameShiftWindow(duty, shiftStart, shiftEnd)) {
+      if (isSameShiftWindow(duty, shiftStart, shiftEnd) && ["Pending", "In Progress", "Completed"].includes(duty.status)) {
         return true;
       }
 
