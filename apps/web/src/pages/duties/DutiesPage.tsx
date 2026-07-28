@@ -247,7 +247,7 @@ function matchesDutyDateRange(duty: DutyItem, dateFrom: string, dateTo: string) 
 }
 
 function isCleanerActiveDuty(duty: DutyItem) {
-  return duty.status === "Pending" || duty.status === "Draft" || duty.status === "Overdue" || duty.status === "In Progress";
+  return duty.status === "Pending" || duty.status === "Overdue" || duty.status === "In Progress";
 }
 
 function getInitials(name: string) {
@@ -328,7 +328,7 @@ export function DutiesPage() {
       title: "",
       description: "",
       priority: "Medium",
-      status: "Draft",
+      status: "Scheduled",
       startDate: "",
       dueDate: "",
       recurringPattern: "daily",
@@ -491,6 +491,9 @@ export function DutiesPage() {
       if (duty.status === "Completed" || duty.status === "In Progress") {
         return duty;
       }
+      if (duty.status === "Scheduled") {
+        throw new Error("This duty is scheduled and will become pending when the site shift starts.");
+      }
 
       return updateDutyStatus(duty.id, "In Progress");
     },
@@ -524,7 +527,7 @@ export function DutiesPage() {
     }
 
     if (cleanerDutyFilter === "Pending") {
-      return siteDuties.filter((duty) => duty.status === "Pending" || duty.status === "Draft" || duty.status === "Overdue");
+      return siteDuties.filter((duty) => duty.status === "Pending" || duty.status === "Overdue");
     }
 
     return siteDuties.filter((duty) => duty.status === cleanerDutyFilter);
@@ -573,7 +576,7 @@ export function DutiesPage() {
       title: "",
       description: "",
       priority: "Medium",
-      status: "Draft",
+      status: "Scheduled",
       startDate: "",
       dueDate: "",
       recurringPattern: "daily",
@@ -937,7 +940,7 @@ export function DutiesPage() {
             const count = filter === "All"
               ? siteDuties.length
               : filter === "Pending"
-                ? siteDuties.filter((duty) => duty.status === "Pending" || duty.status === "Draft" || duty.status === "Overdue").length
+                ? siteDuties.filter((duty) => duty.status === "Pending" || duty.status === "Overdue").length
                 : siteDuties.filter((duty) => duty.status === filter).length;
             const isActive = cleanerDutyFilter === filter;
 

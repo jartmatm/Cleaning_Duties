@@ -4,6 +4,7 @@ type DutyStatus = DutyItem["status"];
 
 const dutyStatusStyles: Record<DutyStatus, string> = {
   Draft: "border-slate-200 bg-slate-100 text-slate-700",
+  Scheduled: "border-indigo-200 bg-indigo-50 text-indigo-800",
   Pending: "border-amber-200 bg-amber-50 text-amber-800",
   "In Progress": "border-sky-200 bg-sky-50 text-sky-800",
   Completed: "border-emerald-200 bg-emerald-50 text-emerald-800",

@@ -30,7 +30,7 @@ type ReferencePhotoItem = {
   status: "uploading" | "done" | "error";
   fileName: string;
 };
-const EDITABLE_DUTY_STATUSES = DUTY_STATUSES.filter((status) => status !== "Archived" && status !== "Missed");
+const EDITABLE_DUTY_STATUSES = DUTY_STATUSES.filter((status) => status !== "Archived" && status !== "Missed" && status !== "Scheduled");
 
 export function PreloadedDutiesPage() {
   const queryClient = useQueryClient();

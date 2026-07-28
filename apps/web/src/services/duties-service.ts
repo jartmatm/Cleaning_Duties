@@ -180,13 +180,22 @@ async function advanceDutySchedule(duties: DutyItem[]) {
   let advanced = false;
 
   for (const duty of duties) {
-    if (!duty.dueDate || new Date(duty.dueDate) > now) {
+    const startsAt = duty.startsAt ? new Date(duty.startsAt) : null;
+    const dueDate = duty.dueDate ? new Date(duty.dueDate) : null;
+
+    if (duty.status === "Scheduled" && startsAt && startsAt <= now && (!dueDate || dueDate > now)) {
+      await updateDutyStatus(duty.id, "Pending");
+      advanced = true;
+      continue;
+    }
+
+    if (!dueDate || dueDate > now) {
       continue;
     }
 
     const canAdvance = duty.recurring
       ? !["Archived", "Missed", "Incomplete"].includes(duty.status)
-      : ["Draft", "Pending", "In Progress"].includes(duty.status);
+      : ["Draft", "Scheduled", "Pending", "In Progress", "Overdue"].includes(duty.status);
 
     if (!canAdvance) {
       continue;
@@ -284,6 +293,14 @@ export async function listAssignedDuties(profileId: string, advanceSchedule = tr
 
 export async function createDuty(siteId: string, createdBy: string, values: DutyFormInput) {
   const payload = await toFormInput(siteId, values);
+  const now = new Date();
+  const startsAt = payload.startsAt ? new Date(payload.startsAt) : null;
+  const dueDate = payload.dueDate ? new Date(payload.dueDate) : null;
+  const status: DutyStatus = dueDate && dueDate <= now
+    ? "Missed"
+    : startsAt && startsAt <= now
+      ? "Pending"
+      : "Scheduled";
   const { data, error } = await supabase
     .from("cleaning_duties")
     .insert({
@@ -292,7 +309,7 @@ export async function createDuty(siteId: string, createdBy: string, values: Duty
       title: payload.title,
       description: payload.description,
       priority: payload.priority,
-      status: payload.status,
+      status,
       starts_at: payload.startsAt,
       due_date: payload.dueDate,
       recurring: payload.recurring,
