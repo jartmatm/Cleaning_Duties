@@ -1,4 +1,4 @@
-import { Loader2, MailPlus, UserRoundPlus, X } from "lucide-react";
+import { Loader2, MailPlus, Trash2, UserRoundPlus, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,15 +10,16 @@ import { useSession } from "../../hooks/use-session";
 import { Card } from "../../components/ui/card";
 import { PageHeader } from "../../components/common/page-header";
 import { SectionTitle } from "../../components/common/section-title";
+import { ConfirmationDialog } from "../../components/common/confirmation-dialog";
 import { notify } from "../../components/common/toast";
 import { inviteCleaner } from "../../services/invite-service";
 import { listSites, type SiteItem } from "../../services/sites-service";
-import { listCompanyUsers } from "../../services/users-service";
+import { deleteCleaner, listCompanyUsers, updateCleaner, type CompanyUser } from "../../services/users-service";
 
 const inviteCleanerSchema = z.object({
   fullName: z.string().trim().min(2, "Enter the cleaner name."),
   email: z.string().email("Enter a valid email."),
-  password: z.string().min(8, "Password must be at least 8 characters."),
+  password: z.string(),
   siteIds: z.array(z.string()).min(1, "Select at least one site."),
 });
 
@@ -30,6 +31,9 @@ export function UsersPage() {
   const { companyId, role } = useSession();
   const isCleaner = role === "Cleaner";
   const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [editingCleaner, setEditingCleaner] = useState<CompanyUser | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CompanyUser | null>(null);
+  const [isDeletingCleaner, setIsDeletingCleaner] = useState(false);
 
   const { data: sites = [] } = useQuery({
     queryKey: ["invite-sites", companyId],
@@ -81,36 +85,106 @@ export function UsersPage() {
         throw new Error("No company is selected for this invitation.");
       }
 
-      await inviteCleaner({
-        fullName: values.fullName,
-        email: values.email,
-        password: values.password,
-        companyId,
-        siteIds: values.siteIds,
-      });
+      if (editingCleaner) {
+        await updateCleaner({
+          cleanerId: editingCleaner.id,
+          fullName: values.fullName,
+          email: values.email,
+          password: values.password,
+          companyId,
+          siteIds: values.siteIds,
+        });
 
-      notify({
-        tone: "success",
-        title: "Cleaner created",
-        message: `${values.email} was added to the company and assigned to ${values.siteIds.length} site${values.siteIds.length === 1 ? "" : "s"}.`,
-      });
+        notify({
+          tone: "success",
+          title: "Cleaner updated",
+          message: `${values.fullName} was updated successfully.`,
+        });
+      } else {
+        if (values.password.length < 8) {
+          form.setError("password", { message: "Password must be at least 8 characters." });
+          return;
+        }
+
+        await inviteCleaner({
+          fullName: values.fullName,
+          email: values.email,
+          password: values.password,
+          companyId,
+          siteIds: values.siteIds,
+        });
+
+        notify({
+          tone: "success",
+          title: "Cleaner created",
+          message: `${values.email} was added to the company and assigned to ${values.siteIds.length} site${values.siteIds.length === 1 ? "" : "s"}.`,
+        });
+      }
       await queryClient.invalidateQueries({ queryKey: ["invite-sites", companyId] });
       await queryClient.invalidateQueries({ queryKey: ["company-users", companyId] });
-      setIsInviteOpen(false);
-      form.reset();
+      closeCleanerForm();
     } catch (error) {
       notify({
         tone: "error",
-        title: "Invite failed",
-        message: error instanceof Error ? error.message : "The cleaner account could not be created.",
+        title: editingCleaner ? "Update failed" : "Invite failed",
+        message: error instanceof Error ? error.message : editingCleaner ? "The cleaner account could not be updated." : "The cleaner account could not be created.",
       });
     }
+  }
+
+  function openCreateCleanerForm() {
+    setEditingCleaner(null);
+    form.reset({ fullName: "", email: "", password: "", siteIds: [] });
+    setIsInviteOpen(true);
+  }
+
+  function openEditCleanerForm(user: CompanyUser) {
+    setEditingCleaner(user);
+    form.reset({
+      fullName: user.name,
+      email: user.email ?? "",
+      password: "",
+      siteIds: user.siteIds,
+    });
+    setIsInviteOpen(true);
+  }
+
+  function closeCleanerForm() {
+    setIsInviteOpen(false);
+    setEditingCleaner(null);
+    form.reset();
   }
 
   function toggleSite(siteId: string) {
     const current = form.getValues("siteIds");
     const next = current.includes(siteId) ? current.filter((id) => id !== siteId) : [...current, siteId];
     form.setValue("siteIds", next, { shouldValidate: true, shouldDirty: true });
+  }
+
+  async function confirmDeleteCleaner() {
+    if (!deleteTarget || !companyId) {
+      return;
+    }
+
+    try {
+      setIsDeletingCleaner(true);
+      await deleteCleaner({ cleanerId: deleteTarget.id, companyId });
+      notify({
+        tone: "success",
+        title: "Cleaner deleted",
+        message: `${deleteTarget.name} was removed from the company.`,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["company-users", companyId] });
+      setDeleteTarget(null);
+    } catch (error) {
+      notify({
+        tone: "error",
+        title: "Delete failed",
+        message: error instanceof Error ? error.message : "The cleaner account could not be deleted.",
+      });
+    } finally {
+      setIsDeletingCleaner(false);
+    }
   }
 
   return (
@@ -123,9 +197,7 @@ export function UsersPage() {
           <>
             <Button
               variant="secondary"
-              onClick={() => {
-                setIsInviteOpen(true);
-              }}
+              onClick={openCreateCleanerForm}
               disabled={!companyId}
             >
               <MailPlus className="h-4 w-4" />
@@ -144,19 +216,16 @@ export function UsersPage() {
           <Card className="w-full max-w-2xl space-y-6 p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-lg font-semibold text-slate-950">Add cleaner</p>
+                <p className="text-lg font-semibold text-slate-950">{editingCleaner ? "Edit cleaner" : "Add cleaner"}</p>
                 <p className="mt-1 text-sm text-slate-500">
-                  Create the account, set a password, and assign the cleaner to one or more sites.
+                  {editingCleaner ? "Update the cleaner details, login email, password, and assigned sites." : "Create the account, set a password, and assign the cleaner to one or more sites."}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setIsInviteOpen(false);
-                  form.reset();
-                }}
+                onClick={closeCleanerForm}
                 className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                aria-label="Close invite dialog"
+                aria-label="Close cleaner dialog"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -192,7 +261,7 @@ export function UsersPage() {
                     type="password"
                     {...form.register("password")}
                     className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400"
-                    placeholder="Create a secure password"
+                    placeholder={editingCleaner ? "Leave blank to keep current password" : "Create a secure password"}
                   />
                   {form.formState.errors.password ? <p className="text-sm text-rose-600">{form.formState.errors.password.message}</p> : null}
                 </div>
@@ -229,10 +298,7 @@ export function UsersPage() {
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => {
-                    setIsInviteOpen(false);
-                    form.reset();
-                  }}
+                  onClick={closeCleanerForm}
                 >
                   Cancel
                 </Button>
@@ -243,7 +309,7 @@ export function UsersPage() {
                       Saving...
                     </>
                   ) : (
-                    "Save"
+                    editingCleaner ? "Save changes" : "Save"
                   )}
                 </Button>
               </div>
@@ -269,14 +335,41 @@ export function UsersPage() {
             </div>
           ) : (
             users.map((user) => (
-              <div key={user.id} className="rounded-lg border border-slate-200 bg-slate-50 p-5">
+              <div
+                key={user.id}
+                role={!isCleaner ? "button" : undefined}
+                tabIndex={!isCleaner ? 0 : undefined}
+                onClick={!isCleaner ? () => openEditCleanerForm(user) : undefined}
+                onKeyDown={!isCleaner ? (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openEditCleanerForm(user);
+                  }
+                } : undefined}
+                className={`rounded-lg border border-slate-200 bg-slate-50 p-5 ${!isCleaner ? "cursor-pointer transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300" : ""}`}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="font-semibold text-slate-950">{user.name}</p>
-                    <p className="mt-1 text-sm text-slate-500">{user.role}</p>
+                    <p className="mt-1 text-sm text-slate-500">{user.email ?? user.role}</p>
                   </div>
-                  <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
-                    {user.status}
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                      {user.status}
+                    </div>
+                    {!isCleaner ? (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setDeleteTarget(user);
+                        }}
+                        className="rounded-full bg-white p-2 text-rose-600 ring-1 ring-rose-100 transition hover:bg-rose-50 hover:text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-200"
+                        aria-label={`Delete ${user.name}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    ) : null}
                   </div>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -295,6 +388,22 @@ export function UsersPage() {
           )}
         </div>
       </Card>
+
+      {deleteTarget ? (
+        <ConfirmationDialog
+          title="Delete cleaner"
+          description={`Remove ${deleteTarget.name} from the company and delete their login account.`}
+          confirmLabel={isDeletingCleaner ? "Deleting..." : "Delete"}
+          cancelLabel="Cancel"
+          destructive
+          onCancel={() => {
+            if (!isDeletingCleaner) {
+              setDeleteTarget(null);
+            }
+          }}
+          onConfirm={confirmDeleteCleaner}
+        />
+      ) : null}
     </div>
   );
 }

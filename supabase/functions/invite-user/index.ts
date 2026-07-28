@@ -124,6 +124,7 @@ Deno.serve(async (request) => {
     id: userId,
     company_id: companyId,
     full_name: fullName,
+    email,
     phone: null,
     role,
     updated_at: new Date().toISOString(),
