@@ -22,7 +22,7 @@ import { getCurrentProfile } from "../../services/profile-service";
 import { listMySites, listSites, type SiteItem } from "../../services/sites-service";
 
 type CleanerFilter = "pending" | "in-progress" | "completed" | "incidents";
-type ManagerDashboardFilter = "pending" | "completed" | "overdue" | "incidents";
+type ManagerDashboardFilter = "pending" | "completed" | "missed" | "incidents";
 
 const filterTitles: Record<CleanerFilter, string> = {
   pending: "Pending duties",
@@ -34,19 +34,19 @@ const filterTitles: Record<CleanerFilter, string> = {
 const managerFilterTitles: Record<ManagerDashboardFilter, string> = {
   pending: "Pending duties",
   completed: "Completed duties",
-  overdue: "Overdue duties",
+  missed: "Missed duties",
   incidents: "Open incidents",
 };
 
 const managerFilterDescriptions: Record<ManagerDashboardFilter, string> = {
   pending: "Open work across the active site.",
   completed: "Work completed today across the active site.",
-  overdue: "Duties that need manager review.",
+  missed: "Duties that were not completed in their shift.",
   incidents: "Open incidents reported this week.",
 };
 
 function isPendingDuty(duty: DutyItem) {
-  return duty.status === "Pending" || duty.status === "Overdue";
+  return duty.status === "Pending";
 }
 
 function isActiveDuty(duty: DutyItem) {
@@ -54,7 +54,7 @@ function isActiveDuty(duty: DutyItem) {
 }
 
 function isCleanerActiveDuty(duty: DutyItem) {
-  return duty.status === "Pending" || duty.status === "Overdue" || duty.status === "In Progress";
+  return duty.status === "Pending" || duty.status === "In Progress";
 }
 
 function isThisWeek(dateValue: string | null) {
@@ -218,7 +218,7 @@ function ManagerDashboard() {
   const todayDuties = duties.filter(isTodayDuty);
   const pendingDuties = todayDuties.filter((duty) => isPendingDuty(duty) || duty.status === "In Progress");
   const completedDuties = duties.filter((duty) => (duty.status === "Completed" || duty.status === "Archived") && isToday(duty.completedAt));
-  const overdueDuties = duties.filter((duty) => duty.status === "Overdue");
+  const missedDuties = duties.filter((duty) => duty.status === "Missed");
   const openWeeklyIncidents = incidents.filter((incident) => isThisWeek(incident.createdAt) && !incident.resolvedAt);
   const displayedDuties = useMemo(() => {
     if (activeFilter === "pending") {
@@ -227,12 +227,12 @@ function ManagerDashboard() {
     if (activeFilter === "completed") {
       return completedDuties;
     }
-    if (activeFilter === "overdue") {
-      return overdueDuties;
+    if (activeFilter === "missed") {
+      return missedDuties;
     }
 
     return todayDuties.slice(0, 3);
-  }, [activeFilter, completedDuties, overdueDuties, pendingDuties, todayDuties]);
+  }, [activeFilter, completedDuties, missedDuties, pendingDuties, todayDuties]);
   const panelTitle = activeFilter ? managerFilterTitles[activeFilter] : "Today's duties";
   const panelDescription = activeFilter ? managerFilterDescriptions[activeFilter] : "The highest priority work across the active site.";
 
@@ -247,8 +247,8 @@ function ManagerDashboard() {
         title={profile?.full_name ? `Good morning, ${profile.full_name}` : "Good morning"}
         description={
           activeSite
-            ? `Track today's workload for ${activeSite.name}, monitor overdue duties, and move quickly from assignment to completion.`
-            : "Select a site to see workload, overdue duties, and live activity."
+            ? `Track today's workload for ${activeSite.name}, monitor missed duties, and move quickly from assignment to completion.`
+            : "Select a site to see workload, missed duties, and live activity."
         }
         actions={
           <>
@@ -261,7 +261,7 @@ function ManagerDashboard() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard active={activeFilter === "pending"} onClick={() => handleKpiClick("pending")} label="Pending Duties" value={String(pendingDuties.length)} detail="Across the selected site" accent={<ListTodo className="h-5 w-5" />} />
         <StatCard active={activeFilter === "completed"} onClick={() => handleKpiClick("completed")} label="Completed Today" value={String(completedDuties.length)} detail="For the active site" accent={<Sparkles className="h-5 w-5" />} />
-        <StatCard active={activeFilter === "overdue"} onClick={() => handleKpiClick("overdue")} label="Overdue" value={String(overdueDuties.length)} detail="Needs manager review" accent={<CircleAlert className="h-5 w-5" />} />
+        <StatCard active={activeFilter === "missed"} onClick={() => handleKpiClick("missed")} label="Missed" value={String(missedDuties.length)} detail="Needs manager review" accent={<CircleAlert className="h-5 w-5" />} />
         <StatCard active={activeFilter === "incidents"} onClick={() => handleKpiClick("incidents")} label="Incidents" value={String(openWeeklyIncidents.length)} detail="Open this week" accent={<Bell className="h-5 w-5" />} />
       </div>
 

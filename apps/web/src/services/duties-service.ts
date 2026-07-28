@@ -195,7 +195,7 @@ async function advanceDutySchedule(duties: DutyItem[]) {
 
     const canAdvance = duty.recurring
       ? !["Archived", "Missed", "Incomplete"].includes(duty.status)
-      : ["Draft", "Scheduled", "Pending", "In Progress", "Overdue"].includes(duty.status);
+      : ["Draft", "Scheduled", "Pending", "In Progress"].includes(duty.status);
 
     if (!canAdvance) {
       continue;

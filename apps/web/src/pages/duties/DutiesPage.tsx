@@ -246,7 +246,7 @@ function matchesDutyDateRange(duty: DutyItem, dateFrom: string, dateTo: string) 
 }
 
 function isCleanerActiveDuty(duty: DutyItem) {
-  return duty.status === "Pending" || duty.status === "Overdue" || duty.status === "In Progress";
+  return duty.status === "Pending" || duty.status === "In Progress";
 }
 
 function getInitials(name: string) {
@@ -528,7 +528,7 @@ export function DutiesPage() {
     }
 
     if (cleanerDutyFilter === "Pending") {
-      return siteDuties.filter((duty) => duty.status === "Pending" || duty.status === "Overdue");
+      return siteDuties.filter((duty) => duty.status === "Pending");
     }
 
     return siteDuties.filter((duty) => duty.status === cleanerDutyFilter);
@@ -941,7 +941,7 @@ export function DutiesPage() {
             const count = filter === "All"
               ? siteDuties.length
               : filter === "Pending"
-                ? siteDuties.filter((duty) => duty.status === "Pending" || duty.status === "Overdue").length
+                ? siteDuties.filter((duty) => duty.status === "Pending").length
                 : siteDuties.filter((duty) => duty.status === filter).length;
             const isActive = cleanerDutyFilter === filter;
 
