@@ -520,8 +520,8 @@ function buildReportPrintHtml(report: ServiceReportItem, excludedPhotos: string[
       const afterPhotos = duty.afterPhotos.filter((photo) => !excludedPhotoSet.has(photo));
       const photoColumn = (title: string, photos: string[]) => {
         const photoRows = Array.from(
-          { length: Math.ceil(photos.length / 2) },
-          (_, rowIndex) => photos.slice(rowIndex * 2, rowIndex * 2 + 2),
+          { length: Math.ceil(photos.length / 3) },
+          (_, rowIndex) => photos.slice(rowIndex * 3, rowIndex * 3 + 3),
         );
 
         return `
@@ -588,9 +588,9 @@ function buildReportPrintHtml(report: ServiceReportItem, excludedPhotos: string[
           .photo-grid { display: grid; grid-template-columns: 1fr; gap: 24px; margin-top: 18px; }
           .photo-title { break-after: avoid-page; page-break-after: avoid; margin: 0 0 8px; color: #475569; font-size: 13px; font-weight: 800; }
           .photo-rows { display: grid; gap: 12px; }
-          .photo-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; break-inside: avoid-page; page-break-inside: avoid; }
+          .photo-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; break-inside: avoid-page; page-break-inside: avoid; }
           .photo-item { min-width: 0; break-inside: avoid-page; page-break-inside: avoid; }
-          .photo-item img { display: block; width: 100%; height: 220px; border-radius: 6px; object-fit: cover; break-inside: avoid-page; page-break-inside: avoid; }
+          .photo-item img { display: block; width: 100%; aspect-ratio: 9 / 16; border-radius: 6px; object-fit: cover; break-inside: avoid-page; page-break-inside: avoid; }
           .empty-photo { border-radius: 6px; background: #f8fafc; padding: 12px; color: #64748b; font-size: 13px; }
           .muted { color: #64748b; }
           @media print {
@@ -602,7 +602,7 @@ function buildReportPrintHtml(report: ServiceReportItem, excludedPhotos: string[
             .photo-grid, .photo-rows { display: block; }
             .photo-section + .photo-section { margin-top: 24px; }
             .photo-row + .photo-row { margin-top: 12px; }
-            .photo-item img { max-height: 58mm; }
+            .photo-item img { max-height: 76mm; }
           }
         </style>
       </head>
@@ -817,10 +817,10 @@ function PhotoStrip({ title, photos, onRemovePhoto }: { title: string; photos: s
   return (
     <div>
       <p className="mb-2 text-sm font-bold text-slate-600">{title}</p>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {photos.map((photo, index) => (
           <div key={`${photo}-${index}`} className="relative overflow-hidden rounded-md">
-            <img src={photo} alt="" className="h-48 w-full object-cover" />
+            <img src={photo} alt="" className="aspect-[9/16] w-full object-cover" />
             <button
               type="button"
               onClick={() => onRemovePhoto(photo)}
