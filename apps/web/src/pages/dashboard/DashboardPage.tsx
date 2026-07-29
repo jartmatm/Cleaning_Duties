@@ -21,14 +21,14 @@ import { listNotifications } from "../../services/notifications-service";
 import { getCurrentProfile } from "../../services/profile-service";
 import { listMySites, listSites, type SiteItem } from "../../services/sites-service";
 
-type CleanerFilter = "pending" | "in-progress" | "completed" | "incidents";
+type CleanerFilter = "scheduled" | "pending" | "in-progress" | "completed";
 type ManagerDashboardFilter = "pending" | "completed" | "missed" | "incidents";
 
 const filterTitles: Record<CleanerFilter, string> = {
+  scheduled: "Scheduled duties",
   pending: "Pending duties",
   "in-progress": "In progress duties",
   completed: "Completed duties",
-  incidents: "Reported incidents",
 };
 
 const managerFilterTitles: Record<ManagerDashboardFilter, string> = {
@@ -415,12 +415,6 @@ function CleanerDashboard() {
     enabled: Boolean(userId),
   });
 
-  const { data: incidents = [] } = useQuery({
-    queryKey: ["cleaner-incidents", userId],
-    queryFn: () => listIncidentsForReporter(userId ?? ""),
-    enabled: Boolean(userId),
-  });
-
   const openDutyMutation = useMutation({
     mutationFn: async (duty: DutyItem) => {
       if (duty.status === "Completed" || duty.status === "In Progress") {
@@ -446,13 +440,20 @@ function CleanerDashboard() {
 
   useEffect(() => {
     const hasInProgressDuties = progressDuties.some((duty) => duty.status === "In Progress");
+    const hasPendingDuties = progressDuties.some((duty) => duty.status === "Pending");
+    const hasScheduledDuties = progressDuties.some((duty) => duty.status === "Scheduled");
 
     if (activeFilter === "in-progress" && !hasInProgressDuties) {
-      setActiveFilter("pending");
+      setActiveFilter(hasPendingDuties ? "pending" : hasScheduledDuties ? "scheduled" : "pending");
+    } else if (activeFilter === "pending" && !hasPendingDuties && hasScheduledDuties) {
+      setActiveFilter("scheduled");
     }
   }, [activeFilter, progressDuties]);
 
   const displayedDuties = useMemo(() => {
+    if (activeFilter === "scheduled") {
+      return progressDuties.filter((duty) => duty.status === "Scheduled");
+    }
     if (activeFilter === "pending") {
       return progressDuties.filter(isPendingDuty);
     }
@@ -464,11 +465,8 @@ function CleanerDashboard() {
     }
     return [];
   }, [activeFilter, progressDuties]);
-  const siteIncidents = useMemo(
-    () => (activeSite ? incidents.filter((incident) => incident.siteId === activeSite.id) : incidents),
-    [activeSite, incidents],
-  );
   const completedDutiesCount = progressDuties.filter((duty) => duty.status === "Completed").length;
+  const scheduledDutiesCount = progressDuties.filter((duty) => duty.status === "Scheduled").length;
   const remainingDutiesCount = Math.max(progressDuties.length - completedDutiesCount, 0);
 
   function handleKpiClick(filter: CleanerFilter) {
@@ -493,21 +491,17 @@ function CleanerDashboard() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <KpiButton active={activeFilter === "scheduled"} label="Scheduled" value={String(scheduledDutiesCount)} detail="Coming up" icon={<ClipboardList className="h-5 w-5" />} onClick={() => handleKpiClick("scheduled")} />
         <KpiButton active={activeFilter === "pending"} label="Pending Duties" value={String(progressDuties.filter(isPendingDuty).length)} detail="Ready to start" icon={<ListTodo className="h-5 w-5" />} onClick={() => handleKpiClick("pending")} />
         <KpiButton active={activeFilter === "in-progress"} label="In Progress" value={String(progressDuties.filter((duty) => duty.status === "In Progress").length)} detail="Currently open" icon={<Loader2 className="h-5 w-5" />} onClick={() => handleKpiClick("in-progress")} />
         <KpiButton active={activeFilter === "completed"} label="Completed" value={String(completedDutiesCount)} detail="Finished today" icon={<CheckCircle2 className="h-5 w-5" />} onClick={() => handleKpiClick("completed")} />
-        <KpiButton active={activeFilter === "incidents"} label="Incidents" value={String(siteIncidents.length)} detail="Reported by you" icon={<CircleAlert className="h-5 w-5" />} onClick={() => handleKpiClick("incidents")} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
         <div ref={cleanerWorkSectionRef} className="scroll-mt-6">
           <Card className="space-y-6 p-5">
-            <SectionTitle title={filterTitles[activeFilter]} description={activeFilter === "incidents" ? "Incident reports submitted from your cleaner profile." : "Open a duty to start work, upload evidence, or complete it."} />
-            {activeFilter === "incidents" ? (
-              <IncidentList incidents={siteIncidents} sites={siteById} />
-            ) : (
-              <DutyList duties={displayedDuties} sites={siteById} isLoading={isLoadingDuties} onOpen={(duty) => openDutyMutation.mutate(duty)} isOpening={openDutyMutation.isPending} />
-            )}
+            <SectionTitle title={filterTitles[activeFilter]} description={activeFilter === "scheduled" ? "Work assigned to the next scheduled shift." : "Open a duty to start work, upload evidence, or complete it."} />
+            <DutyList duties={displayedDuties} sites={siteById} isLoading={isLoadingDuties} onOpen={(duty) => openDutyMutation.mutate(duty)} isOpening={openDutyMutation.isPending} />
           </Card>
         </div>
 
@@ -687,8 +681,8 @@ function DutyList(props: {
             </p>
             <DutyStatusBadge status={duty.status} className="mt-2" />
           </div>
-          <Button variant="secondary" onClick={() => props.onOpen(duty)} disabled={props.isOpening}>
-            Open
+          <Button variant="secondary" onClick={() => props.onOpen(duty)} disabled={props.isOpening || duty.status === "Scheduled"}>
+            {duty.status === "Scheduled" ? "Scheduled" : "Open"}
           </Button>
         </div>
       ))}

@@ -40,7 +40,7 @@ type CleanerDutyFilter = "Pending" | DutyItem["status"] | "All";
 type ManagerPriorityFilter = DutyItem["priority"] | "All";
 type ManagerStatusFilter = DutyItem["status"] | "All";
 
-const CLEANER_DUTY_FILTERS: CleanerDutyFilter[] = ["Pending", "In Progress", "Completed", "Incomplete", "All"];
+const CLEANER_DUTY_FILTERS: CleanerDutyFilter[] = ["Scheduled", "Pending", "In Progress", "Completed", "Incomplete", "All"];
 const MANAGER_PRIORITY_FILTERS: ManagerPriorityFilter[] = ["All", ...DUTY_PRIORITIES];
 const MANAGER_STATUS_FILTERS: ManagerStatusFilter[] = ["All", ...DUTY_STATUSES];
 const RECURRENCE_OPTIONS = [
@@ -1334,11 +1334,14 @@ export function DutiesPage() {
             return (
               <Card
                 key={duty.id}
-                role={role === "Cleaner" ? "button" : undefined}
-                tabIndex={role === "Cleaner" ? 0 : undefined}
-                className={`space-y-4 p-5 ${role === "Cleaner" ? "cursor-pointer transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300" : ""}`}
-                onClick={role === "Cleaner" ? () => openCleanerDutyMutation.mutate(duty) : undefined}
+                role={role === "Cleaner" && duty.status !== "Scheduled" ? "button" : undefined}
+                tabIndex={role === "Cleaner" && duty.status !== "Scheduled" ? 0 : undefined}
+                className={`space-y-4 p-5 ${role === "Cleaner" && duty.status !== "Scheduled" ? "cursor-pointer transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300" : ""}`}
+                onClick={role === "Cleaner" && duty.status !== "Scheduled" ? () => openCleanerDutyMutation.mutate(duty) : undefined}
                 onKeyDown={role === "Cleaner" ? (event) => {
+                  if (duty.status === "Scheduled") {
+                    return;
+                  }
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
                     openCleanerDutyMutation.mutate(duty);
@@ -1370,10 +1373,10 @@ export function DutiesPage() {
                           event.stopPropagation();
                           openCleanerDutyMutation.mutate(duty);
                         }}
-                        disabled={openCleanerDutyMutation.isPending}
+                        disabled={openCleanerDutyMutation.isPending || duty.status === "Scheduled"}
                       >
                         {openCleanerDutyMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                        Open
+                        {duty.status === "Scheduled" ? "Scheduled" : "Open"}
                       </Button>
                     ) : (
                       <>
