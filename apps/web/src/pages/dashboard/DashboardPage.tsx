@@ -105,6 +105,11 @@ function getTime(dateValue: string | null) {
   return Number.isNaN(time) ? null : time;
 }
 
+function formatDutyExecutionDate(duty: Pick<DutyItem, "startsAt" | "dueDate">) {
+  const executionDate = duty.startsAt ?? duty.dueDate;
+  return executionDate ? new Date(executionDate).toLocaleDateString() : "No execution date";
+}
+
 function padDatePart(value: number) {
   return String(value).padStart(2, "0");
 }
@@ -321,7 +326,7 @@ function ManagerDashboard() {
                       <span aria-hidden="true">·</span>
                       <span>{formatSiteShift(activeSite)}</span>
                       <span aria-hidden="true">·</span>
-                      <span>{item.dueDate ? new Date(item.dueDate).toLocaleDateString() : "No execution date"}</span>
+                      <span>{formatDutyExecutionDate(item)}</span>
                       <DutyStatusBadge status={item.status} />
                     </div>
                   </div>
@@ -678,7 +683,7 @@ function DutyList(props: {
           <div>
             <p className="font-medium text-slate-950">{duty.title}</p>
             <p className="mt-1 text-sm text-slate-500">
-              {props.sites.get(duty.siteId)?.name ?? "Assigned site"} · {duty.priority} · {formatSiteShift(props.sites.get(duty.siteId))} · {duty.dueDate ? new Date(duty.dueDate).toLocaleDateString() : "No execution date"}
+              {props.sites.get(duty.siteId)?.name ?? "Assigned site"} · {duty.priority} · {formatSiteShift(props.sites.get(duty.siteId))} · {formatDutyExecutionDate(duty)}
             </p>
             <DutyStatusBadge status={duty.status} className="mt-2" />
           </div>

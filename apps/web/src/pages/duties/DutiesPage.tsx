@@ -218,6 +218,10 @@ function toDateInputValue(dateValue: string | null) {
   return toDateTimeLocalValue(dateValue).slice(0, 10);
 }
 
+function getDutyExecutionDate(duty: Pick<DutyItem, "startsAt" | "dueDate">) {
+  return duty.startsAt ?? duty.dueDate;
+}
+
 function formatSiteShift(site: SiteItem | null) {
   return site?.shiftStartTime && site.shiftEndTime ? `${site.shiftStartTime} - ${site.shiftEndTime}` : "No site shift hours set";
 }
@@ -622,7 +626,7 @@ export function DutiesPage() {
       priority: duty.priority,
       status: duty.status,
       startDate: toDateTimeLocalValue(duty.startsAt),
-      dueDate: toDateInputValue(duty.dueDate),
+      dueDate: toDateInputValue(getDutyExecutionDate(duty)),
       recurringPattern: recurringRule.pattern,
       recurringInterval: recurringRule.interval,
       recurringWeekday: recurringRule.weekday,
@@ -1354,7 +1358,7 @@ export function DutiesPage() {
                     {formatSiteShift(activeSite)}
                   </span>
                   <span className="rounded-full bg-slate-50 px-3 py-1 ring-1 ring-slate-200">
-                    {duty.dueDate ? `Next ${new Date(duty.dueDate).toLocaleDateString()}` : "No execution date"}
+                    {getDutyExecutionDate(duty) ? `Next ${new Date(getDutyExecutionDate(duty)!).toLocaleDateString()}` : "No execution date"}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-end justify-between gap-3">
