@@ -163,7 +163,7 @@ function getCleanerProgressDuties(siteDuties: DutyItem[]) {
         && (dueDate === null || dueDate > now)
         && ["Pending", "In Progress", "Completed"].includes(duty.status);
     })
-    .sort((a, b) => (getTime(a.startsAt) ?? 0) - (getTime(b.startsAt) ?? 0))[0];
+    .sort((a, b) => (getTime(b.startsAt) ?? 0) - (getTime(a.startsAt) ?? 0))[0];
 
   if (activeShiftDuty) {
     const activeShiftKey = getDutyShiftDateTimeKey(activeShiftDuty);
