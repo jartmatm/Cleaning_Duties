@@ -128,11 +128,14 @@ function getRecurrenceStep(pattern: string, interval: number) {
   return { unit: "months", value: 12 };
 }
 
-function getNextWeekday(date: Date, weekday: number, includeCurrent = true) {
-  const next = new Date(date);
-  const daysUntilWeekday = (weekday - next.getDay() + 7) % 7;
-  next.setDate(next.getDate() + (daysUntilWeekday === 0 && !includeCurrent ? 7 : daysUntilWeekday));
-  return next;
+function parseDateInput(dateValue: string) {
+  const [year, month, day] = dateValue.split("-").map(Number);
+
+  if (!year || !month || !day) {
+    return new Date(dateValue);
+  }
+
+  return new Date(year, month - 1, day);
 }
 
 function getUpcomingOccurrences(dateValue: string, pattern: string, interval: number, weekdays: number[] = [1]) {
@@ -140,29 +143,21 @@ function getUpcomingOccurrences(dateValue: string, pattern: string, interval: nu
     return [];
   }
 
-  const startDate = new Date(dateValue);
+  const startDate = parseDateInput(dateValue);
   if (Number.isNaN(startDate.getTime())) {
     return [];
   }
 
   if (pattern === "weekly") {
-    const selectedWeekdays = [...new Set(weekdays)].sort((a, b) => a - b);
+    const selectedWeekdays = new Set(weekdays);
     const occurrences: Date[] = [];
     let cursor = new Date(startDate);
 
     while (occurrences.length < 6) {
-      const nextDates = selectedWeekdays
-        .map((weekday) => getNextWeekday(cursor, weekday, occurrences.length === 0))
-        .sort((a, b) => a.getTime() - b.getTime());
-      const next = nextDates.find((date) => date >= cursor);
-
-      if (!next) {
-        cursor.setDate(cursor.getDate() + 1);
-        continue;
+      if (selectedWeekdays.has(cursor.getDay())) {
+        occurrences.push(new Date(cursor));
       }
 
-      occurrences.push(next);
-      cursor = new Date(next);
       cursor.setDate(cursor.getDate() + 1);
     }
 
