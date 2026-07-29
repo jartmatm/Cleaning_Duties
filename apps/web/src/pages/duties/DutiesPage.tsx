@@ -215,11 +215,35 @@ function toDateTimeLocalValue(dateValue: string | null) {
 }
 
 function toDateInputValue(dateValue: string | null) {
-  return toDateTimeLocalValue(dateValue).slice(0, 10);
+  if (!dateValue) {
+    return "";
+  }
+
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toISOString().slice(0, 10);
 }
 
 function getDutyExecutionDate(duty: Pick<DutyItem, "startsAt" | "dueDate">) {
   return duty.startsAt ?? duty.dueDate;
+}
+
+function getDutyExecutionDateLabel(duty: Pick<DutyItem, "startsAt" | "dueDate">) {
+  const executionDate = getDutyExecutionDate(duty);
+  if (!executionDate) {
+    return "No execution date";
+  }
+
+  const dateKey = toDateInputValue(executionDate);
+  if (!dateKey) {
+    return "No execution date";
+  }
+
+  const [year, month, day] = dateKey.split("-");
+  return `Next ${month}/${day}/${year}`;
 }
 
 function formatSiteShift(site: SiteItem | null) {
@@ -1361,7 +1385,7 @@ export function DutiesPage() {
                     {formatSiteShift(activeSite)}
                   </span>
                   <span className="rounded-full bg-slate-50 px-3 py-1 ring-1 ring-slate-200">
-                    {getDutyExecutionDate(duty) ? `Next ${new Date(getDutyExecutionDate(duty)!).toLocaleDateString()}` : "No execution date"}
+                    {getDutyExecutionDateLabel(duty)}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-end justify-between gap-3">

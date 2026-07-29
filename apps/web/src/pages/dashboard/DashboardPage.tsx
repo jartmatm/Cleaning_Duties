@@ -107,7 +107,17 @@ function getTime(dateValue: string | null) {
 
 function formatDutyExecutionDate(duty: Pick<DutyItem, "startsAt" | "dueDate">) {
   const executionDate = duty.startsAt ?? duty.dueDate;
-  return executionDate ? new Date(executionDate).toLocaleDateString() : "No execution date";
+  if (!executionDate) {
+    return "No execution date";
+  }
+
+  const date = new Date(executionDate);
+  if (Number.isNaN(date.getTime())) {
+    return "No execution date";
+  }
+
+  const [year, month, day] = date.toISOString().slice(0, 10).split("-");
+  return `${month}/${day}/${year}`;
 }
 
 function padDatePart(value: number) {
