@@ -135,12 +135,22 @@ function getNextWeekday(date: Date, weekday: number, includeCurrent = true) {
   return next;
 }
 
+function parseDateInput(dateValue: string) {
+  const [year, month, day] = dateValue.split("-").map(Number);
+
+  if (!year || !month || !day) {
+    return new Date(dateValue);
+  }
+
+  return new Date(year, month - 1, day);
+}
+
 function getUpcomingOccurrences(dateValue: string, pattern: string, interval: number, weekdays: number[] = [1]) {
   if (!dateValue) {
     return [];
   }
 
-  const startDate = new Date(dateValue);
+  const startDate = parseDateInput(dateValue);
   if (Number.isNaN(startDate.getTime())) {
     return [];
   }
