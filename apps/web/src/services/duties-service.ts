@@ -123,54 +123,16 @@ function buildRecurringRule(values: { priority: DutyRow["priority"]; recurringPa
   return JSON.stringify({ pattern, interval, weekday: values.recurringWeekday ?? 1, weekdays: values.recurringWeekdays?.length ? values.recurringWeekdays : [1] });
 }
 
-function getTimeZoneOffsetMs(date: Date, timeZone: string) {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-  const parts = Object.fromEntries(formatter.formatToParts(date).map((part) => [part.type, part.value]));
-  const asUtc = Date.UTC(
-    Number(parts.year),
-    Number(parts.month) - 1,
-    Number(parts.day),
-    Number(parts.hour),
-    Number(parts.minute),
-    Number(parts.second),
-  );
-
-  return asUtc - date.getTime();
-}
-
-function zonedDateTimeToUtc(datePart: string, timeValue: string, timeZone: string) {
-  const guess = new Date(`${datePart}T${timeValue}:00.000Z`);
-  if (Number.isNaN(guess.getTime())) {
-    return null;
-  }
-
-  const firstPass = new Date(guess.getTime() - getTimeZoneOffsetMs(guess, timeZone));
-  return new Date(guess.getTime() - getTimeZoneOffsetMs(firstPass, timeZone));
-}
-
-function buildSiteShiftWindow(dateValue: string, shiftStartTime: string | null, shiftEndTime: string | null, timeZone: string) {
+function buildSiteShiftWindow(dateValue: string, shiftStartTime: string | null, shiftEndTime: string | null) {
   if (!dateValue || !shiftStartTime || !shiftEndTime) {
     return { startsAt: null, dueDate: dateValue ? new Date(dateValue).toISOString() : null };
   }
 
   const [datePart] = dateValue.split("T");
-  if (!datePart) {
-    return { startsAt: null, dueDate: new Date(dateValue).toISOString() };
-  }
+  const start = new Date(`${datePart}T${shiftStartTime}`);
+  const end = new Date(`${datePart}T${shiftEndTime}`);
 
-  const start = zonedDateTimeToUtc(datePart, shiftStartTime, timeZone);
-  const end = zonedDateTimeToUtc(datePart, shiftEndTime, timeZone);
-
-  if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     return { startsAt: null, dueDate: new Date(dateValue).toISOString() };
   }
 
@@ -184,7 +146,7 @@ function buildSiteShiftWindow(dateValue: string, shiftStartTime: string | null, 
 async function getSiteShift(siteId: string) {
   const { data, error } = await supabase
     .from("sites")
-    .select("shift_start_time, shift_end_time, time_zone")
+    .select("shift_start_time, shift_end_time")
     .eq("id", siteId)
     .single();
 
@@ -192,11 +154,10 @@ async function getSiteShift(siteId: string) {
     throw new Error(error.message);
   }
 
-  const row = data as { shift_start_time: string | null; shift_end_time: string | null; time_zone: string | null };
+  const row = data as { shift_start_time: string | null; shift_end_time: string | null };
   return {
     shiftStartTime: row.shift_start_time?.slice(0, 5) ?? null,
     shiftEndTime: row.shift_end_time?.slice(0, 5) ?? null,
-    timeZone: row.time_zone || "Australia/Melbourne",
   };
 }
 
@@ -225,17 +186,6 @@ async function advanceDutySchedule(duties: DutyItem[]) {
     if (duty.status === "Scheduled" && startsAt && startsAt <= now && (!dueDate || dueDate > now)) {
       await updateDutyStatus(duty.id, "Pending");
       advanced = true;
-      continue;
-    }
-
-    if (duty.recurring && duty.status === "Scheduled" && dueDate && dueDate > now) {
-      const { data, error } = await supabase.rpc("advance_duty_schedule", { p_duty_id: duty.id });
-      if (error) {
-        throw new Error(error.message);
-      }
-      if (data) {
-        advanced = true;
-      }
       continue;
     }
 
@@ -280,7 +230,7 @@ async function cleanupArchivedDutiesForProfile(profileId: string) {
 async function toFormInput(siteId: string, values: DutyFormInput) {
   const parsed = dutyFormSchema.parse(values);
   const siteShift = await getSiteShift(siteId);
-  const shiftWindow = buildSiteShiftWindow(parsed.dueDate || parsed.startDate || "", siteShift.shiftStartTime, siteShift.shiftEndTime, siteShift.timeZone);
+  const shiftWindow = buildSiteShiftWindow(parsed.dueDate || parsed.startDate || "", siteShift.shiftStartTime, siteShift.shiftEndTime);
   const recurringRule = buildRecurringRule({
     priority: parsed.priority,
     recurringPattern: parsed.recurringPattern,

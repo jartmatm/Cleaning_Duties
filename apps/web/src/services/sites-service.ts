@@ -1,7 +1,7 @@
 import { siteFormSchema, type SiteFormInput } from "@cleaning-duties/shared";
 import { supabase } from "./supabase-client";
 
-const SITE_SELECT = "id, company_id, name, address, notes, info_photos, storage_bucket, shift_start_time, shift_end_time, time_zone, created_at, updated_at";
+const SITE_SELECT = "id, company_id, name, address, notes, info_photos, storage_bucket, shift_start_time, shift_end_time, created_at, updated_at";
 const SITE_SELECT_WITHOUT_SHIFT = "id, company_id, name, address, notes, info_photos, storage_bucket, created_at, updated_at";
 const SITE_MEMBER_SELECT = `sites(${SITE_SELECT})`;
 const SITE_MEMBER_SELECT_WITHOUT_SHIFT = `sites(${SITE_SELECT_WITHOUT_SHIFT})`;
@@ -16,7 +16,6 @@ export type SiteRow = {
   storage_bucket: string;
   shift_start_time: string | null;
   shift_end_time: string | null;
-  time_zone: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -36,7 +35,6 @@ export type SiteItem = {
   storageBucket: string;
   shiftStartTime: string | null;
   shiftEndTime: string | null;
-  timeZone: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -52,7 +50,6 @@ function mapSite(row: SiteRow): SiteItem {
     storageBucket: row.storage_bucket || `site-${row.id}`,
     shiftStartTime: row.shift_start_time?.slice(0, 5) ?? null,
     shiftEndTime: row.shift_end_time?.slice(0, 5) ?? null,
-    timeZone: row.time_zone || "Australia/Melbourne",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
