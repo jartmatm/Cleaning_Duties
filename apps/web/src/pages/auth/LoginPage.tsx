@@ -192,7 +192,7 @@ export function LoginPage() {
                 "Login"
               )}
             </Button>
-            <Button type="button" variant="secondary" className="w-full" onClick={() => switchMode("signup")}>
+            <Button type="button" className="w-full !bg-slate-950 !text-white shadow-lg shadow-slate-950/20 hover:!bg-slate-800" onClick={() => switchMode("signup")}>
               Sign up
             </Button>
           </form>
