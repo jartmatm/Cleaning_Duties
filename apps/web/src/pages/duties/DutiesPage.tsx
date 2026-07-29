@@ -1218,7 +1218,7 @@ export function DutiesPage() {
                 onClick={form.handleSubmit((values) => onSubmit(values, true))}
               >
                 {createMutation.isPending || updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Save
+                Save as draft
               </Button>
               <Button
                 type="button"
