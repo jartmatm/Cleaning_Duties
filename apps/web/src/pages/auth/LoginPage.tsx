@@ -234,7 +234,7 @@ export function LoginPage() {
                 "Create company"
               )}
             </Button>
-            <Button type="button" variant="secondary" className="w-full" onClick={() => switchMode("login")}>
+            <Button type="button" className="w-full !bg-slate-950 !text-white shadow-lg shadow-slate-950/20 hover:!bg-slate-800" onClick={() => switchMode("login")}>
               Back to login
             </Button>
           </form>
