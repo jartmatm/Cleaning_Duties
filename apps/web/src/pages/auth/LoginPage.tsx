@@ -3,8 +3,8 @@ import { Card } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { authLoginSchema, type AuthLoginInput } from "@cleaning-duties/shared";
-import { requestPasswordReset, signInWithCredentials } from "../../services/auth-service";
+import { authLoginSchema, ownerSignupSchema, type AuthLoginInput, type OwnerSignupInput } from "@cleaning-duties/shared";
+import { requestPasswordReset, signInWithCredentials, signUpOwner } from "../../services/auth-service";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import type { FormEvent } from "react";
@@ -38,16 +38,13 @@ function DataCleanLottiePreview() {
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isResetOpen, setIsResetOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetError, setResetError] = useState<string | null>(null);
   const [isResetSubmitting, setIsResetSubmitting] = useState(false);
-  const {
-    register,
-    handleSubmit,
-    formState: { isSubmitting },
-  } = useForm<AuthLoginInput>({
+  const loginForm = useForm<AuthLoginInput>({
     resolver: zodResolver(authLoginSchema),
     defaultValues: {
       identifier: "",
@@ -55,8 +52,29 @@ export function LoginPage() {
       rememberMe: false,
     },
   });
+  const signupForm = useForm<OwnerSignupInput>({
+    resolver: zodResolver(ownerSignupSchema),
+    defaultValues: {
+      companyName: "",
+      ownerName: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+    },
+  });
+  const {
+    register: registerLogin,
+    handleSubmit: handleLoginSubmit,
+    formState: { isSubmitting },
+  } = loginForm;
+  const {
+    register: registerSignup,
+    handleSubmit: handleSignupSubmit,
+    formState: { isSubmitting: isSignupSubmitting, errors: signupErrors },
+  } = signupForm;
 
   async function onSubmit(values: AuthLoginInput) {
+    setErrorMessage(null);
     const result = await signInWithCredentials(values);
     if (!result.ok) {
       setErrorMessage(result.message);
@@ -66,6 +84,33 @@ export function LoginPage() {
 
     notify({ tone: "success", title: "Welcome back", message: "Login completed successfully." });
     navigate("/");
+  }
+
+  async function onSignupSubmit(values: OwnerSignupInput) {
+    setErrorMessage(null);
+    const result = await signUpOwner(values);
+
+    if (!result.ok) {
+      setErrorMessage(result.message);
+      notify({ tone: "error", title: "Sign up failed", message: result.message });
+      return;
+    }
+
+    if (result.needsEmailConfirmation) {
+      notify({ tone: "success", title: "Company created", message: "Check your email to confirm the owner account." });
+      switchMode("login");
+      return;
+    }
+
+    notify({ tone: "success", title: "Company created", message: "Your owner account is ready." });
+    navigate("/");
+  }
+
+  function switchMode(nextMode: "login" | "signup") {
+    setMode(nextMode);
+    setErrorMessage(null);
+    loginForm.clearErrors();
+    signupForm.clearErrors();
   }
 
   async function onPasswordResetSubmit(event: FormEvent<HTMLFormElement>) {
@@ -110,43 +155,90 @@ export function LoginPage() {
             <p className="max-w-md text-sm text-slate-600">Manage cleaning operations with clarity.</p>
           </div>
         </div>
-        <form className="space-y-4 p-2 lg:p-4" onSubmit={handleSubmit(onSubmit)}>
-          <div>
-            <label className="mb-2 block text-sm font-medium text-black">Email or phone</label>
-            <Input placeholder="you@company.com" {...register("identifier")} />
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium text-black">Password</label>
-            <Input type="password" placeholder="••••••••" {...register("password")} />
-          </div>
-          <div className="flex items-center justify-between text-sm text-slate-600">
-            <label className="flex items-center gap-2">
-              <input type="checkbox" {...register("rememberMe")} />
-              Remember me
-            </label>
-            <button
-              type="button"
-              className="font-medium text-slate-900 transition hover:text-slate-600"
-              onClick={() => {
-                setResetError(null);
-                setIsResetOpen(true);
-              }}
-            >
-              Forgot your password?
-            </button>
-          </div>
-          {errorMessage ? <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</p> : null}
-          <Button className="w-full !bg-slate-950 !text-white shadow-lg shadow-slate-950/20 hover:!bg-slate-800" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Signing in...
-              </>
-            ) : (
-              "Login"
-            )}
-          </Button>
-        </form>
+        {mode === "login" ? (
+          <form className="space-y-4 p-2 lg:p-4" onSubmit={handleLoginSubmit(onSubmit)}>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-black">Email or phone</label>
+              <Input placeholder="you@company.com" {...registerLogin("identifier")} />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-black">Password</label>
+              <Input type="password" placeholder="••••••••" {...registerLogin("password")} />
+            </div>
+            <div className="flex items-center justify-between text-sm text-slate-600">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" {...registerLogin("rememberMe")} />
+                Remember me
+              </label>
+              <button
+                type="button"
+                className="font-medium text-slate-900 transition hover:text-slate-600"
+                onClick={() => {
+                  setResetError(null);
+                  setIsResetOpen(true);
+                }}
+              >
+                Forgot your password?
+              </button>
+            </div>
+            {errorMessage ? <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</p> : null}
+            <Button className="w-full !bg-slate-950 !text-white shadow-lg shadow-slate-950/20 hover:!bg-slate-800" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                "Login"
+              )}
+            </Button>
+            <Button type="button" variant="secondary" className="w-full" onClick={() => switchMode("signup")}>
+              Sign up
+            </Button>
+          </form>
+        ) : (
+          <form className="space-y-4 p-2 lg:p-4" onSubmit={handleSignupSubmit(onSignupSubmit)}>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-black">Company name</label>
+              <Input placeholder="Company name" {...registerSignup("companyName")} />
+              {signupErrors.companyName ? <p className="mt-1 text-sm text-red-600">{signupErrors.companyName.message}</p> : null}
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-black">Owner name</label>
+              <Input placeholder="Your name" {...registerSignup("ownerName")} />
+              {signupErrors.ownerName ? <p className="mt-1 text-sm text-red-600">{signupErrors.ownerName.message}</p> : null}
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-black">Email</label>
+              <Input type="email" placeholder="owner@company.com" {...registerSignup("email")} />
+              {signupErrors.email ? <p className="mt-1 text-sm text-red-600">{signupErrors.email.message}</p> : null}
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-black">Password</label>
+              <Input type="password" placeholder="Create a secure password" {...registerSignup("password")} />
+              {signupErrors.password ? <p className="mt-1 text-sm text-red-600">{signupErrors.password.message}</p> : null}
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-black">Confirm password</label>
+              <Input type="password" placeholder="Confirm password" {...registerSignup("confirmPassword")} />
+              {signupErrors.confirmPassword ? <p className="mt-1 text-sm text-red-600">{signupErrors.confirmPassword.message}</p> : null}
+            </div>
+            {errorMessage ? <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</p> : null}
+            <Button className="w-full !bg-slate-950 !text-white shadow-lg shadow-slate-950/20 hover:!bg-slate-800" disabled={isSignupSubmitting}>
+              {isSignupSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Creating account...
+                </>
+              ) : (
+                "Create company"
+              )}
+            </Button>
+            <Button type="button" variant="secondary" className="w-full" onClick={() => switchMode("login")}>
+              Back to login
+            </Button>
+          </form>
+        )}
       </Card>
       {isResetOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">

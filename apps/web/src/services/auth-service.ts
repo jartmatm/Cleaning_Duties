@@ -1,8 +1,12 @@
-import { authLoginSchema, type AuthLoginInput } from "@cleaning-duties/shared";
+import { authLoginSchema, ownerSignupSchema, type AuthLoginInput, type OwnerSignupInput } from "@cleaning-duties/shared";
 import { setRememberMe, supabase } from "./supabase-client";
 
 type LoginResult =
   | { ok: true }
+  | { ok: false; message: string };
+
+type SignupResult =
+  | { ok: true; needsEmailConfirmation: boolean }
   | { ok: false; message: string };
 
 function isEmail(identifier: string) {
@@ -11,6 +15,10 @@ function isEmail(identifier: string) {
 
 export function validateLogin(input: unknown): AuthLoginInput {
   return authLoginSchema.parse(input);
+}
+
+export function validateOwnerSignup(input: unknown): OwnerSignupInput {
+  return ownerSignupSchema.parse(input);
 }
 
 export async function signInWithCredentials(input: unknown): Promise<LoginResult> {
@@ -26,6 +34,29 @@ export async function signInWithCredentials(input: unknown): Promise<LoginResult
   }
 
   return { ok: true };
+}
+
+export async function signUpOwner(input: unknown): Promise<SignupResult> {
+  const values = validateOwnerSignup(input);
+  setRememberMe(true);
+
+  const { data, error } = await supabase.auth.signUp({
+    email: values.email,
+    password: values.password,
+    options: {
+      data: {
+        company_name: values.companyName,
+        full_name: values.ownerName,
+        role: "Owner",
+      },
+    },
+  });
+
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+
+  return { ok: true, needsEmailConfirmation: !data.session };
 }
 
 export async function signOut() {
