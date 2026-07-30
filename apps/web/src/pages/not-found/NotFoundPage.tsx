@@ -18,7 +18,7 @@ export function NotFoundPage() {
             The link may be outdated or the page may have moved.
           </p>
         </div>
-        <Button className="mt-8" onClick={() => navigate("/")}>
+        <Button className="mt-8 !bg-slate-950 !text-white shadow-lg shadow-slate-950/20 hover:!bg-slate-800" onClick={() => navigate("/")}>
           <Home className="h-4 w-4" />
           Back to home
         </Button>
