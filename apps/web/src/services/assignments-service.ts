@@ -87,9 +87,17 @@ export async function replaceDutyAssignments(dutyId: string, siteId: string, ass
   }
 
   try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (!accessToken) {
+      return;
+    }
+
     const response = await fetch(apiUrl("/duty-notifications/assignments"), {
       method: "POST",
       headers: {
+        Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

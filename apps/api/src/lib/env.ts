@@ -7,6 +7,8 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().email().optional(),
   APP_URL: z.string().url().optional(),
+  ONESIGNAL_APP_ID: z.string().uuid().optional(),
+  ONESIGNAL_REST_API_KEY: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);
