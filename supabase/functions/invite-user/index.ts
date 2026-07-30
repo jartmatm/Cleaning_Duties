@@ -75,11 +75,11 @@ Deno.serve(async (request) => {
   const companyId = payload.company_id ?? "";
   const siteIds = Array.isArray(payload.site_ids) ? [...new Set(payload.site_ids)] : [];
 
-  if (fullName.length < 2) return jsonResponse({ error: "Enter the cleaner name" }, 400);
+  if (fullName.length < 2) return jsonResponse({ error: "Enter the user name" }, 400);
   if (!email.includes("@")) return jsonResponse({ error: "Enter a valid email" }, 400);
   if (password.length < 8) return jsonResponse({ error: "Password must be at least 8 characters" }, 400);
   if (!uuidPattern.test(companyId)) return jsonResponse({ error: "A valid company is required" }, 400);
-  if (role !== "Cleaner") return jsonResponse({ error: "Only cleaner invitations are supported" }, 400);
+  if (!["Manager", "Cleaner"].includes(role)) return jsonResponse({ error: "Only manager and cleaner invitations are supported" }, 400);
   if (siteIds.length === 0 || siteIds.some((siteId) => !uuidPattern.test(siteId))) {
     return jsonResponse({ error: "Select at least one valid site" }, 400);
   }
@@ -132,7 +132,7 @@ Deno.serve(async (request) => {
 
   if (profileError) {
     await admin.auth.admin.deleteUser(userId);
-    return jsonResponse({ error: errorMessage(profileError, "Could not create cleaner profile") }, 500);
+    return jsonResponse({ error: errorMessage(profileError, "Could not create user profile") }, 500);
   }
 
   const { error: membershipError } = await admin.from("site_members").upsert(
@@ -142,7 +142,7 @@ Deno.serve(async (request) => {
 
   if (membershipError) {
     await admin.auth.admin.deleteUser(userId);
-    return jsonResponse({ error: errorMessage(membershipError, "Could not assign cleaner to selected sites") }, 500);
+    return jsonResponse({ error: errorMessage(membershipError, "Could not assign user to selected sites") }, 500);
   }
 
   return jsonResponse({ userId }, 201);

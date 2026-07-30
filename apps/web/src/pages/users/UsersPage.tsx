@@ -12,18 +12,19 @@ import { PageHeader } from "../../components/common/page-header";
 import { SectionTitle } from "../../components/common/section-title";
 import { ConfirmationDialog } from "../../components/common/confirmation-dialog";
 import { notify } from "../../components/common/toast";
-import { inviteCleaner } from "../../services/invite-service";
+import { inviteCleaner, inviteManager } from "../../services/invite-service";
 import { listSites, type SiteItem } from "../../services/sites-service";
 import { deleteCleaner, listCompanyUsers, updateCleaner, type CompanyUser } from "../../services/users-service";
 
 const inviteCleanerSchema = z.object({
-  fullName: z.string().trim().min(2, "Enter the cleaner name."),
+  fullName: z.string().trim().min(2, "Enter the name."),
   email: z.string().email("Enter a valid email."),
   password: z.string(),
   siteIds: z.array(z.string()).min(1, "Select at least one site."),
 });
 
 type InviteCleanerInput = z.infer<typeof inviteCleanerSchema>;
+type InviteMode = "Cleaner" | "Manager";
 
 export function UsersPage() {
   const queryClient = useQueryClient();
@@ -31,6 +32,7 @@ export function UsersPage() {
   const { companyId, role } = useSession();
   const isCleaner = role === "Cleaner";
   const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [inviteMode, setInviteMode] = useState<InviteMode>("Cleaner");
   const [editingCleaner, setEditingCleaner] = useState<CompanyUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CompanyUser | null>(null);
   const [isDeletingCleaner, setIsDeletingCleaner] = useState(false);
@@ -106,7 +108,8 @@ export function UsersPage() {
           return;
         }
 
-        await inviteCleaner({
+        const invite = inviteMode === "Manager" ? inviteManager : inviteCleaner;
+        await invite({
           fullName: values.fullName,
           email: values.email,
           password: values.password,
@@ -116,8 +119,8 @@ export function UsersPage() {
 
         notify({
           tone: "success",
-          title: "Cleaner created",
-          message: `${values.email} was added to the company and assigned to ${values.siteIds.length} site${values.siteIds.length === 1 ? "" : "s"}.`,
+          title: `${inviteMode} created`,
+          message: `${values.email} was added as a ${inviteMode.toLowerCase()} and assigned to ${values.siteIds.length} site${values.siteIds.length === 1 ? "" : "s"}.`,
         });
       }
       await queryClient.invalidateQueries({ queryKey: ["invite-sites", companyId] });
@@ -127,18 +130,31 @@ export function UsersPage() {
       notify({
         tone: "error",
         title: editingCleaner ? "Update failed" : "Invite failed",
-        message: error instanceof Error ? error.message : editingCleaner ? "The cleaner account could not be updated." : "The cleaner account could not be created.",
+        message: error instanceof Error ? error.message : editingCleaner ? "The cleaner account could not be updated." : `The ${inviteMode.toLowerCase()} account could not be created.`,
       });
     }
   }
 
   function openCreateCleanerForm() {
+    setInviteMode("Cleaner");
+    setEditingCleaner(null);
+    form.reset({ fullName: "", email: "", password: "", siteIds: [] });
+    setIsInviteOpen(true);
+  }
+
+  function openCreateManagerForm() {
+    setInviteMode("Manager");
     setEditingCleaner(null);
     form.reset({ fullName: "", email: "", password: "", siteIds: [] });
     setIsInviteOpen(true);
   }
 
   function openEditCleanerForm(user: CompanyUser) {
+    if (user.role !== "Cleaner") {
+      return;
+    }
+
+    setInviteMode("Cleaner");
     setEditingCleaner(user);
     form.reset({
       fullName: user.name,
@@ -203,7 +219,10 @@ export function UsersPage() {
               <MailPlus className="h-4 w-4" />
               Add Cleaner
             </Button>
-            <Button disabled>
+            <Button
+              onClick={openCreateManagerForm}
+              disabled={!companyId}
+            >
               <UserRoundPlus className="h-4 w-4" />
               Invite Manager
             </Button>
@@ -216,16 +235,16 @@ export function UsersPage() {
           <Card className="w-full max-w-2xl space-y-6 p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-lg font-semibold text-slate-950">{editingCleaner ? "Edit cleaner" : "Add cleaner"}</p>
+                <p className="text-lg font-semibold text-slate-950">{editingCleaner ? "Edit cleaner" : inviteMode === "Manager" ? "Invite manager" : "Add cleaner"}</p>
                 <p className="mt-1 text-sm text-slate-500">
-                  {editingCleaner ? "Update the cleaner details, login email, password, and assigned sites." : "Create the account, set a password, and assign the cleaner to one or more sites."}
+                  {editingCleaner ? "Update the cleaner details, login email, password, and assigned sites." : `Create the account, set a password, and assign the ${inviteMode.toLowerCase()} to one or more sites.`}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={closeCleanerForm}
                 className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                aria-label="Close cleaner dialog"
+                aria-label="Close user dialog"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -234,7 +253,7 @@ export function UsersPage() {
             <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)}>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium text-slate-700">Cleaner name</label>
+                  <label className="text-sm font-medium text-slate-700">{editingCleaner ? "Cleaner name" : `${inviteMode} name`}</label>
                   <input
                     type="text"
                     {...form.register("fullName")}
@@ -250,7 +269,7 @@ export function UsersPage() {
                     type="email"
                     {...form.register("email")}
                     className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400"
-                    placeholder="cleaner@company.com"
+                    placeholder={inviteMode === "Manager" ? "manager@company.com" : "cleaner@company.com"}
                   />
                   {form.formState.errors.email ? <p className="text-sm text-rose-600">{form.formState.errors.email.message}</p> : null}
                 </div>
@@ -319,7 +338,7 @@ export function UsersPage() {
       ) : null}
 
       <Card className="space-y-4 p-5">
-        <SectionTitle title="Cleaners" description="Active cleaners and the sites they can access." />
+        <SectionTitle title="Team members" description="Active managers, cleaners, and the sites they can access." />
         <div className="grid gap-4 md:grid-cols-2">
           {isLoadingUsers ? (
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 md:col-span-2">
@@ -337,16 +356,16 @@ export function UsersPage() {
             users.map((user) => (
               <div
                 key={user.id}
-                role={!isCleaner ? "button" : undefined}
-                tabIndex={!isCleaner ? 0 : undefined}
-                onClick={!isCleaner ? () => openEditCleanerForm(user) : undefined}
-                onKeyDown={!isCleaner ? (event) => {
+                role={!isCleaner && user.role === "Cleaner" ? "button" : undefined}
+                tabIndex={!isCleaner && user.role === "Cleaner" ? 0 : undefined}
+                onClick={!isCleaner && user.role === "Cleaner" ? () => openEditCleanerForm(user) : undefined}
+                onKeyDown={!isCleaner && user.role === "Cleaner" ? (event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
                     openEditCleanerForm(user);
                   }
                 } : undefined}
-                className={`rounded-lg border border-slate-200 bg-slate-50 p-5 ${!isCleaner ? "cursor-pointer transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300" : ""}`}
+                className={`rounded-lg border border-slate-200 bg-slate-50 p-5 ${!isCleaner && user.role === "Cleaner" ? "cursor-pointer transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300" : ""}`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -355,9 +374,12 @@ export function UsersPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                      {user.role}
+                    </div>
+                    <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
                       {user.status}
                     </div>
-                    {!isCleaner ? (
+                    {!isCleaner && user.role === "Cleaner" ? (
                       <button
                         type="button"
                         onClick={(event) => {

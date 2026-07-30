@@ -36,7 +36,7 @@ export async function listCompanyUsers(companyId: string): Promise<CompanyUser[]
     .from("profiles")
     .select("id, full_name, email, phone, role, created_at")
     .eq("company_id", companyId)
-    .eq("role", "Cleaner")
+    .in("role", ["Manager", "Cleaner"])
     .order("role", { ascending: true })
     .order("full_name", { ascending: true });
 

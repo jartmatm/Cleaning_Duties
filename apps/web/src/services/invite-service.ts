@@ -1,9 +1,10 @@
 import { supabase } from "./supabase-client";
 
-type InviteCleanerInput = {
+type InviteUserInput = {
   fullName: string;
   email: string;
   password: string;
+  role: "Manager" | "Cleaner";
   companyId: string;
   siteIds: string[];
 };
@@ -29,16 +30,16 @@ async function functionErrorMessage(error: unknown) {
     return error.message;
   }
 
-  return "The cleaner account could not be created.";
+  return "The user account could not be created.";
 }
 
-export async function inviteCleaner(input: InviteCleanerInput) {
+export async function inviteUser(input: InviteUserInput) {
   const { data, error } = await supabase.functions.invoke("invite-user", {
     body: {
       full_name: input.fullName,
       email: input.email,
       password: input.password,
-      role: "Cleaner",
+      role: input.role,
       company_id: input.companyId,
       site_ids: input.siteIds,
     },
@@ -49,4 +50,12 @@ export async function inviteCleaner(input: InviteCleanerInput) {
   }
 
   return data as { userId: string };
+}
+
+export function inviteCleaner(input: Omit<InviteUserInput, "role">) {
+  return inviteUser({ ...input, role: "Cleaner" });
+}
+
+export function inviteManager(input: Omit<InviteUserInput, "role">) {
+  return inviteUser({ ...input, role: "Manager" });
 }
