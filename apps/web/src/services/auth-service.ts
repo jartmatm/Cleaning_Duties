@@ -44,6 +44,7 @@ export async function signUpOwner(input: unknown): Promise<SignupResult> {
     email: values.email,
     password: values.password,
     options: {
+      emailRedirectTo: "https://cleaning-duties-web.vercel.app/",
       data: {
         company_name: values.companyName,
         full_name: values.ownerName,
