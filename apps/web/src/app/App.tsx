@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { useSession } from "../hooks/use-session";
 import { AppLayout } from "../layouts/AppLayout";
 import { AuthLayout } from "../layouts/AuthLayout";
@@ -12,6 +12,7 @@ import { ReportsPage } from "../pages/reports/ReportsPage";
 import { SiteInfoPage } from "../pages/sites/SiteInfoPage";
 import { SitesPage } from "../pages/sites/SitesPage";
 import { UsersPage } from "../pages/users/UsersPage";
+import { NotFoundPage } from "../pages/not-found/NotFoundPage";
 import { ProtectedRoute } from "../routes/protected-route";
 import { PublicRoute } from "../routes/public-route";
 import { getCurrentProfile } from "../services/profile-service";
@@ -248,7 +249,7 @@ function AppRoutes() {
               </ProtectedRoute>
             }
           />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
     </>
