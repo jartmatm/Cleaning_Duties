@@ -20,6 +20,7 @@ import { createIncident, listIncidentsForReporter, listIncidentsForSite } from "
 import { listNotifications } from "../../services/notifications-service";
 import { getCurrentProfile } from "../../services/profile-service";
 import { listMySites, listSites, type SiteItem } from "../../services/sites-service";
+import { formatDate, formatDateTime } from "../../utils/date-format";
 
 type CleanerFilter = "scheduled" | "pending" | "in-progress" | "completed";
 type ManagerDashboardFilter = "pending" | "completed" | "missed" | "incidents";
@@ -107,17 +108,7 @@ function getTime(dateValue: string | null) {
 
 function formatDutyExecutionDate(duty: Pick<DutyItem, "startsAt" | "dueDate">) {
   const executionDate = duty.startsAt ?? duty.dueDate;
-  if (!executionDate) {
-    return "No execution date";
-  }
-
-  const date = new Date(executionDate);
-  if (Number.isNaN(date.getTime())) {
-    return "No execution date";
-  }
-
-  const [year, month, day] = date.toISOString().slice(0, 10).split("-");
-  return `${month}/${day}/${year}`;
+  return formatDate(executionDate) || "No execution date";
 }
 
 function padDatePart(value: number) {
@@ -317,7 +308,7 @@ function ManagerDashboard() {
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <p className="font-medium text-slate-950">{incident.incidentType}</p>
                       <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
-                        {new Date(incident.createdAt).toLocaleString()}
+                        {formatDateTime(incident.createdAt)}
                       </span>
                     </div>
                     <p className="mt-2 text-sm text-slate-500">{incident.details}</p>
@@ -358,7 +349,7 @@ function ManagerDashboard() {
                 notifications.map((notification) => (
                   <div key={notification.id} className="rounded-md bg-slate-50 p-4">
                     <p className="text-sm font-medium text-slate-950">{notification.type}</p>
-                    <p className="mt-1 text-sm text-slate-500">{new Date(notification.createdAt).toLocaleString()}</p>
+                    <p className="mt-1 text-sm text-slate-500">{formatDateTime(notification.createdAt)}</p>
                   </div>
                 ))
               )}
@@ -716,7 +707,7 @@ function IncidentList(props: { incidents: Awaited<ReturnType<typeof listIncident
             </span>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            {props.sites.get(incident.siteId)?.name ?? "Site"} · {new Date(incident.createdAt).toLocaleString()}
+            {props.sites.get(incident.siteId)?.name ?? "Site"} · {formatDateTime(incident.createdAt)}
           </p>
           <pre className="mt-3 whitespace-pre-wrap rounded-md bg-white p-3 text-sm text-slate-600 ring-1 ring-slate-200">{incident.details}</pre>
         </div>

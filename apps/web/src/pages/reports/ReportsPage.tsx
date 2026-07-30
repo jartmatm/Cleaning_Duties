@@ -15,6 +15,7 @@ import { listDuties, type DutyItem } from "../../services/duties-service";
 import { getCurrentProfile } from "../../services/profile-service";
 import { createServiceReport, deleteServiceReport, listServiceReports, type ServiceReportItem, type ServiceReportSnapshot } from "../../services/reports-service";
 import { listSites } from "../../services/sites-service";
+import { formatDate, formatDateTime } from "../../utils/date-format";
 
 type DateRange = {
   dateFrom: string;
@@ -61,8 +62,10 @@ function isValidDateRange(range: DateRange) {
 }
 
 function formatReportRange(snapshot: Pick<ServiceReportSnapshot, "dateFrom" | "dateTo" | "timeFrom" | "timeTo">) {
-  const from = snapshot.timeFrom ? `${snapshot.dateFrom} ${snapshot.timeFrom}` : snapshot.dateFrom;
-  const to = snapshot.timeTo ? `${snapshot.dateTo} ${snapshot.timeTo}` : snapshot.dateTo;
+  const fromDate = formatDate(snapshot.dateFrom) || snapshot.dateFrom;
+  const toDate = formatDate(snapshot.dateTo) || snapshot.dateTo;
+  const from = snapshot.timeFrom ? `${fromDate} ${snapshot.timeFrom}` : fromDate;
+  const to = snapshot.timeTo ? `${toDate} ${snapshot.timeTo}` : toDate;
   return from === to ? from : `${from} / ${to}`;
 }
 
@@ -415,7 +418,7 @@ export function ReportsPage() {
                   >
                     <p className="font-semibold text-slate-950">{report.title}</p>
                     <p className="mt-1 text-sm text-slate-500">
-                      {formatReportRange(report.snapshot)} · {new Date(report.createdAt).toLocaleString()}
+                      {formatReportRange(report.snapshot)} · {formatDateTime(report.createdAt)}
                     </p>
                   </button>
                   <div className="flex shrink-0 items-center gap-1">
@@ -610,7 +613,7 @@ function buildReportPrintHtml(report: ServiceReportItem, excludedPhotos: string[
         <main class="page">
           <div class="top">
             <p>${escapeHtml(snapshot.companyName)}${snapshot.siteName ? ` - ${escapeHtml(snapshot.siteName)}` : ""}</p>
-            <p>${escapeHtml(new Date(snapshot.generatedAt).toLocaleString())}</p>
+            <p>${escapeHtml(formatDateTime(snapshot.generatedAt))}</p>
           </div>
           <section class="brand">
             ${snapshot.companyLogoUrl ? `<img class="logo" src="${escapeHtml(snapshot.companyLogoUrl)}" alt="${escapeHtml(snapshot.companyName)} logo" />` : `<h2>${escapeHtml(snapshot.companyName)}</h2>`}
@@ -622,7 +625,7 @@ function buildReportPrintHtml(report: ServiceReportItem, excludedPhotos: string[
           </section>
           <section class="rows">
             <div class="row"><strong>Score</strong><span>${snapshot.completedCount} / ${snapshot.totalCount} (${score}%)</span></div>
-            <div class="row"><strong>Conducted on</strong><span>${escapeHtml(new Date(snapshot.generatedAt).toLocaleString())}</span></div>
+            <div class="row"><strong>Conducted on</strong><span>${escapeHtml(formatDateTime(snapshot.generatedAt))}</span></div>
             <div class="row"><strong>Prepared by</strong><span>${escapeHtml(snapshot.preparedBy)}</span></div>
           </section>
           <h2 class="section-title">Services performed</h2>
@@ -743,7 +746,7 @@ function ReportPreview({ report, excludedPhotos, onRemovePhoto }: { report: Serv
       <div className="bg-white p-8 text-slate-950">
         <div className="flex items-start justify-between gap-6 text-sm font-semibold text-slate-600">
           <p>{snapshot.companyName}{snapshot.siteName ? ` - ${snapshot.siteName}` : ""}</p>
-          <p>{new Date(snapshot.generatedAt).toLocaleString()}</p>
+          <p>{formatDateTime(snapshot.generatedAt)}</p>
         </div>
         <div className="mt-12">
           {snapshot.companyLogoUrl ? (
@@ -762,7 +765,7 @@ function ReportPreview({ report, excludedPhotos, onRemovePhoto }: { report: Serv
 
         <div className="mt-10 divide-y divide-slate-200 border-y border-slate-200 text-lg">
           <ReportRow label="Score" value={`${snapshot.completedCount} / ${snapshot.totalCount} (${score}%)`} />
-          <ReportRow label="Conducted on" value={new Date(snapshot.generatedAt).toLocaleString()} />
+          <ReportRow label="Conducted on" value={formatDateTime(snapshot.generatedAt)} />
           <ReportRow label="Prepared by" value={snapshot.preparedBy} />
         </div>
 

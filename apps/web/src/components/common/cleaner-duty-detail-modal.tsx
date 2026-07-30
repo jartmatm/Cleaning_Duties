@@ -11,6 +11,7 @@ import { addDutyComment, replaceDutyEvidencePhotos, updateDutyStatus, type DutyI
 import type { SiteItem } from "../../services/sites-service";
 import { getCompanyPalette } from "../../constants/company-palettes";
 import { useSession } from "../../hooks/use-session";
+import { formatDate } from "../../utils/date-format";
 
 type CleanerDutyDetailModalProps = {
   duty: DutyItem;
@@ -173,7 +174,7 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           <InfoBlock label="Priority" value={duty.priority} />
-          <InfoBlock label="Execution date" value={duty.startsAt || duty.dueDate ? new Date(duty.startsAt ?? duty.dueDate!).toLocaleDateString() : "No date set"} />
+          <InfoBlock label="Execution date" value={formatDate(duty.startsAt ?? duty.dueDate) || "No date set"} />
           <InfoBlock label="Site shift" value={formatSiteShift(site)} />
           <InfoBlock label="Equipment" value={duty.equipment.length ? duty.equipment.join(", ") : "None listed"} />
         </div>

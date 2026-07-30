@@ -20,6 +20,7 @@ import { useSession } from "../../hooks/use-session";
 import { dutyFormSchema, type DutyFormInput, DUTY_PRIORITIES, DUTY_STATUSES } from "@cleaning-duties/shared";
 import { notify } from "../../components/common/toast";
 import { uploadDutyReferencePhoto } from "../../services/duty-photo-service";
+import { formatDate } from "../../utils/date-format";
 import {
   createPreloadedDuty,
   deletePreloadedDuty,
@@ -237,13 +238,8 @@ function getDutyExecutionDateLabel(duty: Pick<DutyItem, "startsAt" | "dueDate">)
     return "No execution date";
   }
 
-  const dateKey = toDateInputValue(executionDate);
-  if (!dateKey) {
-    return "No execution date";
-  }
-
-  const [year, month, day] = dateKey.split("-");
-  return `Next ${month}/${day}/${year}`;
+  const formattedDate = formatDate(executionDate);
+  return formattedDate ? `Next ${formattedDate}` : "No execution date";
 }
 
 function formatSiteShift(site: SiteItem | null) {
@@ -1138,7 +1134,7 @@ export function DutiesPage() {
                     <div className="flex flex-wrap gap-2">
                       {recurrencePreviewDates.map((date) => (
                         <span key={date.toISOString()} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
-                          {date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                          {formatDate(date)}
                         </span>
                       ))}
                     </div>
