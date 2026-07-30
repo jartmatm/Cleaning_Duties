@@ -7,7 +7,6 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { CleanerDutyDetailModal } from "../../components/common/cleaner-duty-detail-modal";
-import { CompletionCelebration } from "../../components/common/completion-celebration";
 import { DutyStatusBadge } from "../../components/common/duty-status-badge";
 import { PageHeader } from "../../components/common/page-header";
 import { QuickActions } from "../../components/common/quick-actions";
@@ -52,10 +51,6 @@ function isPendingDuty(duty: DutyItem) {
 
 function isActiveDuty(duty: DutyItem) {
   return !["Completed", "Archived", "Missed", "Incomplete"].includes(duty.status);
-}
-
-function isCleanerActiveDuty(duty: DutyItem) {
-  return duty.status === "Pending" || duty.status === "In Progress";
 }
 
 function isThisWeek(dateValue: string | null) {
@@ -394,13 +389,14 @@ function BarChartBenchmark({ data }: { data: Array<{ key: string; value: number 
 }
 
 function CleanerDashboard() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { userId, companyName, activeSiteId } = useSession();
   const cleanerWorkSectionRef = useRef<HTMLDivElement | null>(null);
+  const previousRemainingDutiesCountRef = useRef<number | null>(null);
   const [activeFilter, setActiveFilter] = useState<CleanerFilter>("in-progress");
   const [selectedDuty, setSelectedDuty] = useState<DutyItem | null>(null);
   const [isIncidentOpen, setIsIncidentOpen] = useState(false);
-  const [showCompletionCelebration, setShowCompletionCelebration] = useState(false);
 
   const { data: sites = [] } = useQuery({
     queryKey: ["cleaner-sites", userId],
@@ -470,17 +466,25 @@ function CleanerDashboard() {
   const scheduledDutiesCount = progressDuties.filter((duty) => duty.status === "Scheduled").length;
   const remainingDutiesCount = Math.max(progressDuties.length - completedDutiesCount, 0);
 
+  useEffect(() => {
+    const previousRemainingDutiesCount = previousRemainingDutiesCountRef.current;
+    previousRemainingDutiesCountRef.current = remainingDutiesCount;
+
+    if (
+      previousRemainingDutiesCount !== null
+      && previousRemainingDutiesCount > 0
+      && remainingDutiesCount === 0
+      && progressDuties.length > 0
+    ) {
+      navigate("/celebration");
+    }
+  }, [navigate, progressDuties.length, remainingDutiesCount]);
+
   function handleKpiClick(filter: CleanerFilter) {
     setActiveFilter(filter);
     window.requestAnimationFrame(() => {
       cleanerWorkSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
-  }
-
-  function handleDutyCompleted() {
-    if (siteDuties.filter(isCleanerActiveDuty).length <= 1) {
-      setShowCompletionCelebration(true);
-    }
   }
 
   return (
@@ -529,13 +533,8 @@ function CleanerDashboard() {
           duty={selectedDuty}
           site={siteById.get(selectedDuty.siteId) ?? null}
           userId={userId}
-          onCompleted={handleDutyCompleted}
           onClose={() => setSelectedDuty(null)}
         />
-      ) : null}
-
-      {showCompletionCelebration ? (
-        <CompletionCelebration onComplete={() => setShowCompletionCelebration(false)} />
       ) : null}
 
       {isIncidentOpen ? (

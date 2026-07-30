@@ -7,7 +7,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { CleanerDutyDetailModal } from "../../components/common/cleaner-duty-detail-modal";
-import { CompletionCelebration } from "../../components/common/completion-celebration";
 import { DutyStatusBadge } from "../../components/common/duty-status-badge";
 import { Input } from "../../components/ui/input";
 import { PageHeader } from "../../components/common/page-header";
@@ -264,10 +263,6 @@ function matchesDutyDateRange(duty: DutyItem, dateFrom: string, dateTo: string) 
   return (!rangeStart || dutyEnd >= rangeStart) && (!rangeEnd || dutyStart <= rangeEnd);
 }
 
-function isCleanerActiveDuty(duty: DutyItem) {
-  return duty.status === "Pending" || duty.status === "In Progress";
-}
-
 function getInitials(name: string) {
   return name
     .split(" ")
@@ -296,7 +291,6 @@ export function DutiesPage() {
   const [referencePhotoItems, setReferencePhotoItems] = useState<ReferencePhotoItem[]>([]);
   const [hasSelectedPreloadedDuty, setHasSelectedPreloadedDuty] = useState(false);
   const [preloadedSuggestionsDismissed, setPreloadedSuggestionsDismissed] = useState(false);
-  const [showCompletionCelebration, setShowCompletionCelebration] = useState(false);
   const [cleanerDutyFilter, setCleanerDutyFilter] = useState<CleanerDutyFilter>("Pending");
   const [showManagerFilters, setShowManagerFilters] = useState(false);
   const [managerDateFrom, setManagerDateFrom] = useState("");
@@ -810,12 +804,6 @@ export function DutiesPage() {
   function handleManagerStatusFilter(status: ManagerStatusFilter) {
     setManagerStatusFilter(status);
     scrollToDutyList();
-  }
-
-  function handleCleanerDutyCompleted() {
-    if (siteDuties.filter(isCleanerActiveDuty).length <= 1) {
-      setShowCompletionCelebration(true);
-    }
   }
 
   return (
@@ -1478,13 +1466,8 @@ export function DutiesPage() {
           duty={selectedCleanerDuty}
           site={activeSite}
           userId={userId}
-          onCompleted={handleCleanerDutyCompleted}
           onClose={() => setSelectedCleanerDuty(null)}
         />
-      ) : null}
-
-      {showCompletionCelebration ? (
-        <CompletionCelebration onComplete={() => setShowCompletionCelebration(false)} />
       ) : null}
     </div>
   );

@@ -13,6 +13,7 @@ import { SiteInfoPage } from "../pages/sites/SiteInfoPage";
 import { SitesPage } from "../pages/sites/SitesPage";
 import { UsersPage } from "../pages/users/UsersPage";
 import { NotFoundPage } from "../pages/not-found/NotFoundPage";
+import { CompletionCelebrationPage } from "../pages/celebration/CompletionCelebrationPage";
 import { ProtectedRoute } from "../routes/protected-route";
 import { PublicRoute } from "../routes/public-route";
 import { getCurrentProfile } from "../services/profile-service";
@@ -246,6 +247,14 @@ function AppRoutes() {
                 <AppLayout>
                   <PreloadedDutiesPage />
                 </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/celebration"
+            element={
+              <ProtectedRoute>
+                <CompletionCelebrationPage />
               </ProtectedRoute>
             }
           />
