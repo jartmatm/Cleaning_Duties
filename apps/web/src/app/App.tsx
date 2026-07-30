@@ -18,6 +18,7 @@ import { ProtectedRoute } from "../routes/protected-route";
 import { PublicRoute } from "../routes/public-route";
 import { getCurrentProfile } from "../services/profile-service";
 import { getCompanySettings } from "../services/company-service";
+import { oneSignalService } from "../services/onesignal-service";
 import { supabase } from "../services/supabase-client";
 import { ToastViewport } from "../components/common/toast";
 import { SettingsPage } from "../pages/settings/SettingsPage";
@@ -34,6 +35,32 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+type OneSignalProfile = {
+  id: string;
+  company_id: string;
+  role: string;
+};
+
+type OneSignalCompany = {
+  name: string;
+};
+
+function syncOneSignalUser(profile: OneSignalProfile, company: OneSignalCompany, email: string | null | undefined) {
+  void oneSignalService
+    .login(profile.id)
+    .then(() =>
+      Promise.all([
+        oneSignalService.addEmail(email),
+        oneSignalService.addTags({
+          company_id: profile.company_id,
+          company_name: company.name,
+          role: profile.role,
+        }),
+      ]),
+    )
+    .catch(() => undefined);
+}
 
 export function App() {
   const { setSession, setEmail, clearSession, setSessionLoading } = useSession();
@@ -55,6 +82,7 @@ export function App() {
 
       if (!session?.user) {
         clearSession();
+        void oneSignalService.logout().catch(() => undefined);
         return;
       }
 
@@ -74,6 +102,7 @@ export function App() {
         role: profile.role,
       });
       setEmail(session.user.email ?? session.user.phone ?? null);
+      syncOneSignalUser(profile, company, session.user.email ?? session.user.phone ?? null);
     }
 
     syncSession(true).catch(() => {
@@ -89,6 +118,7 @@ export function App() {
 
       if (!session?.user) {
         clearSession();
+        void oneSignalService.logout().catch(() => undefined);
         return;
       }
 
@@ -108,6 +138,7 @@ export function App() {
           role: profile.role,
         });
         setEmail(session.user.email ?? session.user.phone ?? null);
+        syncOneSignalUser(profile, company, session.user.email ?? session.user.phone ?? null);
       })();
     });
 
