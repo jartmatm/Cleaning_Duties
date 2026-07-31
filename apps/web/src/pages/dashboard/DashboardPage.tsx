@@ -181,6 +181,22 @@ function getCleanerProgressDuties(siteDuties: DutyItem[]) {
   );
 }
 
+function getPreferredCleanerFilter(counts: Record<CleanerFilter, number>) {
+  if (counts["in-progress"] > 0) {
+    return "in-progress";
+  }
+  if (counts.pending > 0) {
+    return "pending";
+  }
+  if (counts.completed > 0) {
+    return "completed";
+  }
+  if (counts.scheduled > 0) {
+    return "scheduled";
+  }
+  return "pending";
+}
+
 function formatSiteShift(site: SiteItem | null | undefined) {
   return site?.shiftStartTime && site.shiftEndTime ? `${site.shiftStartTime} - ${site.shiftEndTime}` : "No site shift";
 }
@@ -434,18 +450,18 @@ function CleanerDashboard() {
     [activeSite, duties],
   );
   const progressDuties = useMemo(() => getCleanerProgressDuties(siteDuties), [siteDuties]);
+  const cleanerKpiCounts = useMemo<Record<CleanerFilter, number>>(() => ({
+    "in-progress": progressDuties.filter((duty) => duty.status === "In Progress").length,
+    pending: progressDuties.filter(isPendingDuty).length,
+    completed: progressDuties.filter((duty) => duty.status === "Completed").length,
+    scheduled: progressDuties.filter((duty) => duty.status === "Scheduled").length,
+  }), [progressDuties]);
 
   useEffect(() => {
-    const hasInProgressDuties = progressDuties.some((duty) => duty.status === "In Progress");
-    const hasPendingDuties = progressDuties.some((duty) => duty.status === "Pending");
-    const hasScheduledDuties = progressDuties.some((duty) => duty.status === "Scheduled");
-
-    if (activeFilter === "in-progress" && !hasInProgressDuties) {
-      setActiveFilter(hasPendingDuties ? "pending" : hasScheduledDuties ? "scheduled" : "pending");
-    } else if (activeFilter === "pending" && !hasPendingDuties && hasScheduledDuties) {
-      setActiveFilter("scheduled");
+    if (cleanerKpiCounts[activeFilter] === 0) {
+      setActiveFilter(getPreferredCleanerFilter(cleanerKpiCounts));
     }
-  }, [activeFilter, progressDuties]);
+  }, [activeFilter, cleanerKpiCounts]);
 
   const displayedDuties = useMemo(() => {
     if (activeFilter === "scheduled") {
@@ -462,8 +478,7 @@ function CleanerDashboard() {
     }
     return [];
   }, [activeFilter, progressDuties]);
-  const completedDutiesCount = progressDuties.filter((duty) => duty.status === "Completed").length;
-  const scheduledDutiesCount = progressDuties.filter((duty) => duty.status === "Scheduled").length;
+  const completedDutiesCount = cleanerKpiCounts.completed;
   const remainingDutiesCount = Math.max(progressDuties.length - completedDutiesCount, 0);
 
   useEffect(() => {
@@ -496,10 +511,10 @@ function CleanerDashboard() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiButton active={activeFilter === "scheduled"} label="Scheduled" value={String(scheduledDutiesCount)} detail="Coming up" icon={<ClipboardList className="h-5 w-5" />} onClick={() => handleKpiClick("scheduled")} />
-        <KpiButton active={activeFilter === "pending"} label="Pending Duties" value={String(progressDuties.filter(isPendingDuty).length)} detail="Ready to start" icon={<ListTodo className="h-5 w-5" />} onClick={() => handleKpiClick("pending")} />
-        <KpiButton active={activeFilter === "in-progress"} label="In Progress" value={String(progressDuties.filter((duty) => duty.status === "In Progress").length)} detail="Currently open" icon={<Loader2 className="h-5 w-5" />} onClick={() => handleKpiClick("in-progress")} />
+        <KpiButton active={activeFilter === "in-progress"} label="In Progress" value={String(cleanerKpiCounts["in-progress"])} detail="Currently open" icon={<Loader2 className="h-5 w-5" />} onClick={() => handleKpiClick("in-progress")} />
+        <KpiButton active={activeFilter === "pending"} label="Pending Duties" value={String(cleanerKpiCounts.pending)} detail="Ready to start" icon={<ListTodo className="h-5 w-5" />} onClick={() => handleKpiClick("pending")} />
         <KpiButton active={activeFilter === "completed"} label="Completed" value={String(completedDutiesCount)} detail="Finished today" icon={<CheckCircle2 className="h-5 w-5" />} onClick={() => handleKpiClick("completed")} />
+        <KpiButton active={activeFilter === "scheduled"} label="Scheduled" value={String(cleanerKpiCounts.scheduled)} detail="Coming up" icon={<ClipboardList className="h-5 w-5" />} onClick={() => handleKpiClick("scheduled")} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
