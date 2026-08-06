@@ -9,6 +9,9 @@ const envSchema = z.object({
   APP_URL: z.string().url().optional(),
   ONESIGNAL_APP_ID: z.string().uuid().optional(),
   ONESIGNAL_REST_API_KEY: z.string().optional(),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_PRICE_ID: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

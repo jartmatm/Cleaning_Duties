@@ -19,6 +19,12 @@ services:
         sync: false
       - key: ONESIGNAL_REST_API_KEY
         sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false
       - key: APP_URL
         sync: false
       - key: CORS_ORIGIN

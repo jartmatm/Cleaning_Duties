@@ -22,6 +22,9 @@ Run `apps/api` with:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `ONESIGNAL_APP_ID`
 - `ONESIGNAL_REST_API_KEY`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_ID`
 - `APP_URL` optional, for notification deep links
 - `CORS_ORIGIN` optional, for example `http://localhost:5173`
 
@@ -39,4 +42,7 @@ Set these production environment variables:
 - Render API: `SUPABASE_SERVICE_ROLE_KEY`
 - Render API: `ONESIGNAL_APP_ID`
 - Render API: `ONESIGNAL_REST_API_KEY`
+- Render API: `STRIPE_SECRET_KEY`
+- Render API: `STRIPE_WEBHOOK_SECRET`
+- Render API: `STRIPE_PRICE_ID`
 - Render API: `APP_URL`, for example `https://cleaning-duties-web.vercel.app`

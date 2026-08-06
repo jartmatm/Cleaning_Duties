@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Check, ImageUp, Loader2, RotateCcw, Save } from "lucide-react";
+import { Check, CreditCard, ImageUp, Loader2, RotateCcw, Save } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
@@ -12,6 +12,7 @@ import { notify } from "../../components/common/toast";
 import { companyPalettes, getCompanyPalette } from "../../constants/company-palettes";
 import { useSession } from "../../hooks/use-session";
 import { updatePassword } from "../../services/auth-service";
+import { createCheckoutSession, createPortalSession, getBillingStatus } from "../../services/billing-service";
 import { getCompanySettings, updateArchiveCleanupSettings, updateCompanySettings, uploadCompanyLogo } from "../../services/company-service";
 import { getCurrentProfile, updateProfileName } from "../../services/profile-service";
 
@@ -43,6 +44,12 @@ export function SettingsPage() {
     queryKey: ["manager-profile", userId],
     queryFn: () => getCurrentProfile(userId ?? ""),
     enabled: Boolean(userId),
+  });
+
+  const { data: billingStatus, isLoading: isLoadingBilling } = useQuery({
+    queryKey: ["billing-status", companyId],
+    queryFn: () => getBillingStatus(companyId ?? ""),
+    enabled: Boolean(companyId) && canManagePreloadedDuties,
   });
 
   const activePalette = useMemo(() => getCompanyPalette(selectedPalette), [selectedPalette]);
@@ -169,6 +176,38 @@ export function SettingsPage() {
       notify({ tone: "error", title: "Could not update archive cleanup", message: error instanceof Error ? error.message : "Unknown error" });
       setArchiveCleanupEnabled(company?.archiveCleanupEnabled ?? false);
       setArchiveCleanupDays(String(company?.archiveCleanupDays || 10));
+    },
+  });
+
+  const checkoutMutation = useMutation({
+    mutationFn: async () => {
+      if (!companyId) {
+        throw new Error("Missing company context");
+      }
+
+      return createCheckoutSession(companyId);
+    },
+    onSuccess: (session) => {
+      window.location.assign(session.url);
+    },
+    onError: (error) => {
+      notify({ tone: "error", title: "Could not start checkout", message: error instanceof Error ? error.message : "Unknown error" });
+    },
+  });
+
+  const portalMutation = useMutation({
+    mutationFn: async () => {
+      if (!companyId) {
+        throw new Error("Missing company context");
+      }
+
+      return createPortalSession(companyId);
+    },
+    onSuccess: (session) => {
+      window.location.assign(session.url);
+    },
+    onError: (error) => {
+      notify({ tone: "error", title: "Could not open billing portal", message: error instanceof Error ? error.message : "Unknown error" });
     },
   });
 
@@ -354,6 +393,39 @@ export function SettingsPage() {
 
       {canManagePreloadedDuties ? (
         <div className="space-y-6">
+          <Card className="space-y-5 p-5">
+            <SectionTitle
+              title="Billing"
+              description="Manage the company subscription, invoices, billing details, and tax IDs."
+            />
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-slate-950">
+                    {isLoadingBilling ? "Loading billing..." : `Subscription: ${billingStatus?.status ?? "inactive"}`}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {billingStatus?.currentPeriodEnd
+                      ? `Current period ends ${new Date(billingStatus.currentPeriodEnd).toLocaleDateString("en-AU")}`
+                      : "Stripe Billing handles recurring invoices and payment collection."}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {billingStatus?.hasCustomer ? (
+                    <Button type="button" variant="secondary" onClick={() => portalMutation.mutate()} disabled={portalMutation.isPending || checkoutMutation.isPending}>
+                      {portalMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                      Manage billing
+                    </Button>
+                  ) : null}
+                  <Button type="button" onClick={() => checkoutMutation.mutate()} disabled={checkoutMutation.isPending || portalMutation.isPending}>
+                    {checkoutMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                    {billingStatus?.hasSubscription ? "Update subscription" : "Start subscription"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+
           <Card className="space-y-4 p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <Toggle
