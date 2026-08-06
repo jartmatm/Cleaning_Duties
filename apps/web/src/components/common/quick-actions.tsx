@@ -1,9 +1,11 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
+import { useSession } from "../../hooks/use-session";
 
 export function QuickActions() {
   const navigate = useNavigate();
+  const { role } = useSession();
 
   return (
     <Card className="space-y-4 p-5">
@@ -12,9 +14,9 @@ export function QuickActions() {
         <p className="mt-1 text-sm text-slate-500">Start the most common manager workflows.</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button onClick={() => navigate("/sites?create=1")}>Create Site</Button>
+        {role === "Manager" ? <Button onClick={() => navigate("/sites?create=1")}>Create Site</Button> : null}
         <Button variant="secondary" onClick={() => navigate("/duties?create=1")}>Create Duty</Button>
-        <Button variant="ghost" onClick={() => navigate("/users?invite=1")}>Invite User</Button>
+        <Button variant="ghost" onClick={() => navigate("/users?invite=1")}>Add Cleaner</Button>
       </div>
     </Card>
   );

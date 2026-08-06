@@ -15,10 +15,11 @@ import { getCompanySettings } from "../services/company-service";
 export function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const { userId, email, role, companyId, companyName, companyLogoUrl, companyPalette, activeSiteId, setActiveSiteId, setCompanyBranding } = useSession();
+  const usesAssignedSites = role !== "Manager";
   const { data: sites = [] } = useQuery({
-    queryKey: role === "Cleaner" ? ["layout-sites", companyId, "cleaner", userId] : ["layout-sites", companyId],
-    queryFn: () => role === "Cleaner" ? listMySites(userId ?? "") : listSites(companyId ?? ""),
-    enabled: role === "Cleaner" ? Boolean(userId) : Boolean(companyId),
+    queryKey: usesAssignedSites ? ["layout-sites", companyId, role, userId] : ["layout-sites", companyId],
+    queryFn: () => usesAssignedSites ? listMySites(userId ?? "") : listSites(companyId ?? ""),
+    enabled: usesAssignedSites ? Boolean(userId) : Boolean(companyId),
   });
   const { data: companySettings } = useQuery({
     queryKey: ["company-settings", companyId],

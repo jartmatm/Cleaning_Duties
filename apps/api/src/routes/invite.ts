@@ -26,7 +26,7 @@ inviteRouter.post("/", async (req, res) => {
   const { email, password, role = "Cleaner", company_id, site_ids = [] } = req.body as {
     email?: string;
     password?: string;
-    role?: "Owner" | "Manager" | "Cleaner";
+    role?: "Supervisor" | "Cleaner";
     company_id?: string;
     site_ids?: string[];
     full_name?: string;
@@ -40,6 +40,7 @@ inviteRouter.post("/", async (req, res) => {
   if (!company_id) return res.status(400).json({ error: "company_id is required" });
   if (!uuidPattern.test(company_id)) return res.status(400).json({ error: "company_id must be a valid UUID" });
   if (!Array.isArray(site_ids)) return res.status(400).json({ error: "site_ids must be an array" });
+  if (!["Supervisor", "Cleaner"].includes(role)) return res.status(400).json({ error: "role must be Supervisor or Cleaner" });
 
   const uniqueSiteIds = [...new Set(site_ids)];
   const invalidSiteId = uniqueSiteIds.find((siteId) => !uuidPattern.test(siteId));
@@ -47,6 +48,24 @@ inviteRouter.post("/", async (req, res) => {
 
   try {
     const supabase = createSupabaseAdminClient();
+    const authorization = req.headers.authorization;
+    if (!authorization?.startsWith("Bearer ")) return res.status(401).json({ error: "Authentication required" });
+
+    const { data: authData, error: authError } = await supabase.auth.getUser(authorization.slice("Bearer ".length));
+    if (authError || !authData.user) return res.status(401).json({ error: "Your session is no longer valid" });
+
+    const { data: requester, error: requesterError } = await supabase
+      .from("profiles")
+      .select("company_id, role")
+      .eq("id", authData.user.id)
+      .maybeSingle<{ company_id: string; role: "Manager" | "Supervisor" | "Cleaner" }>();
+    if (requesterError) return res.status(500).json({ error: errorMessage(requesterError, "Could not verify your profile") });
+    if (!requester || requester.company_id !== company_id || !["Manager", "Supervisor"].includes(requester.role)) {
+      return res.status(403).json({ error: "You are not allowed to invite users to this company" });
+    }
+    if (requester.role === "Supervisor" && role !== "Cleaner") {
+      return res.status(403).json({ error: "Supervisors can only create cleaner accounts" });
+    }
 
     const { data: company, error: companyError } = await supabase.from("companies").select("id").eq("id", company_id).maybeSingle();
     if (companyError) return res.status(500).json({ error: errorMessage(companyError, "Could not verify company") });
@@ -58,6 +77,18 @@ inviteRouter.post("/", async (req, res) => {
 
       if ((sites ?? []).length !== uniqueSiteIds.length) {
         return res.status(400).json({ error: "All selected sites must belong to the company" });
+      }
+
+      if (requester.role === "Supervisor") {
+        const { data: allowedSites, error: allowedSitesError } = await supabase
+          .from("site_members")
+          .select("site_id")
+          .eq("profile_id", authData.user.id)
+          .in("site_id", uniqueSiteIds);
+        if (allowedSitesError) return res.status(500).json({ error: errorMessage(allowedSitesError, "Could not verify supervisor site access") });
+        if ((allowedSites ?? []).length !== uniqueSiteIds.length) {
+          return res.status(403).json({ error: "Cleaners can only be assigned to sites supervised by you" });
+        }
       }
     }
 

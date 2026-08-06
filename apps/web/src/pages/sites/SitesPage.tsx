@@ -38,15 +38,17 @@ export function SitesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { companyId, userId, role, setActiveSiteId } = useSession();
   const isCleaner = role === "Cleaner";
+  const canManageSites = role === "Manager";
+  const usesAssignedSites = role !== "Manager";
   const [search, setSearch] = useState("");
   const [editingSite, setEditingSite] = useState<SiteItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SiteItem | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
   const { data: sites = [], isLoading } = useQuery({
-    queryKey: isCleaner ? ["sites", "cleaner", userId, search] : ["sites", companyId, search],
-    queryFn: () => isCleaner ? listMySites(userId ?? "", search) : listSites(companyId ?? "", search),
-    enabled: isCleaner ? Boolean(userId) : Boolean(companyId),
+    queryKey: usesAssignedSites ? ["sites", role, userId, search] : ["sites", companyId, search],
+    queryFn: () => usesAssignedSites ? listMySites(userId ?? "", search) : listSites(companyId ?? "", search),
+    enabled: usesAssignedSites ? Boolean(userId) : Boolean(companyId),
   });
 
   const form = useForm<SiteFormInput>({
@@ -114,7 +116,7 @@ export function SitesPage() {
   }
 
   useEffect(() => {
-    if (isCleaner || searchParams.get("create") !== "1") {
+    if (!canManageSites || searchParams.get("create") !== "1") {
       return;
     }
 
@@ -123,7 +125,7 @@ export function SitesPage() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("create");
     setSearchParams(nextParams, { replace: true });
-  }, [isCleaner, searchParams, setSearchParams]);
+  }, [canManageSites, searchParams, setSearchParams]);
 
   function startEdit(site: SiteItem) {
     setShowCreate(false);
@@ -156,14 +158,14 @@ export function SitesPage() {
       <PageHeader
         eyebrow="Sites"
         title="Company sites"
-        description={isCleaner ? "Review the sites assigned to your cleaner profile." : "Manage the buildings, teams, and site-specific workstreams under one company."}
+        description={canManageSites ? "Manage the buildings, teams, and site-specific workstreams under one company." : isCleaner ? "Review the sites assigned to your cleaner profile." : "Review the sites assigned to your supervisor profile."}
         actions={
           <>
             <Button variant="secondary" onClick={() => setSearch("")} disabled={createMutation.isPending || updateMutation.isPending || deleteMutation.isPending}>
               <Search className="h-4 w-4" />
               Clear search
             </Button>
-            {!isCleaner ? (
+            {canManageSites ? (
             <Button onClick={startCreate} disabled={createMutation.isPending || updateMutation.isPending}>
               <Plus className="h-4 w-4" />
               {createMutation.isPending ? "Creating..." : "Create Site"}
@@ -196,7 +198,7 @@ export function SitesPage() {
         </div>
       </Card>
 
-      {!isCleaner && (showCreate || editingSite) ? (
+      {canManageSites && (showCreate || editingSite) ? (
         <Card className="space-y-4 p-5">
           <div className="flex items-center justify-between gap-4">
             <SectionTitle
@@ -282,7 +284,7 @@ export function SitesPage() {
           <Card className="p-8 text-center">
             <p className="text-lg font-semibold text-slate-950">No sites yet</p>
             <p className="mt-2 text-sm text-slate-500">{isCleaner ? "No sites are assigned to your cleaner profile yet." : "Create the first site to start organizing duties and cleaners."}</p>
-            {!isCleaner ? (
+            {canManageSites ? (
               <div className="mt-4">
             <Button onClick={startCreate} disabled={createMutation.isPending || updateMutation.isPending}>
                 {createMutation.isPending ? (
@@ -323,7 +325,7 @@ export function SitesPage() {
                 {formatSiteShift(site)}
               </div>
               <p className="text-sm text-slate-600 line-clamp-3">{site.notes || "No notes."}</p>
-              {!isCleaner ? (
+              {canManageSites ? (
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="secondary"
@@ -372,7 +374,7 @@ export function SitesPage() {
         </div>
       </Card>
 
-      {!isCleaner && deleteTarget ? (
+      {canManageSites && deleteTarget ? (
         <ConfirmationDialog
           title={`Delete ${deleteTarget.name}?`}
           description="This will permanently remove the site and its related data."

@@ -5,7 +5,7 @@ export type ProfileRecord = {
   company_id: string;
   full_name: string;
   phone: string | null;
-  role: "Owner" | "Manager" | "Cleaner";
+  role: "Manager" | "Supervisor" | "Cleaner";
 };
 
 export async function getCurrentProfile(userId: string) {

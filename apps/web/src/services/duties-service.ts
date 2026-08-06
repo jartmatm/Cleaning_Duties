@@ -361,15 +361,15 @@ async function createDutyWithOptions(siteId: string, createdBy: string, values: 
   return { ...duty, assignedUserIds: payload.assignedUserIds };
 }
 
-export async function updateDuty(dutyId: string, values: DutyFormInput) {
-  return updateDutyWithOptions(dutyId, values);
+export async function updateDuty(dutyId: string, assignedBy: string, values: DutyFormInput) {
+  return updateDutyWithOptions(dutyId, assignedBy, values);
 }
 
-export async function updateDraftDuty(dutyId: string, values: DutyFormInput) {
-  return updateDutyWithOptions(dutyId, values, { draft: true });
+export async function updateDraftDuty(dutyId: string, assignedBy: string, values: DutyFormInput) {
+  return updateDutyWithOptions(dutyId, assignedBy, values, { draft: true });
 }
 
-async function updateDutyWithOptions(dutyId: string, values: DutyFormInput, options: { draft?: boolean } = {}) {
+async function updateDutyWithOptions(dutyId: string, assignedBy: string, values: DutyFormInput, options: { draft?: boolean } = {}) {
   const siteId = await getDutySiteId(dutyId);
   const payload = await toFormInput(siteId, values);
   const now = new Date();
@@ -403,7 +403,7 @@ async function updateDutyWithOptions(dutyId: string, values: DutyFormInput, opti
   }
 
   const duty = mapDuty(data as DutyRow);
-  await replaceDutyAssignments(duty.id, duty.siteId, payload.assignedUserIds, duty.createdBy);
+  await replaceDutyAssignments(duty.id, duty.siteId, payload.assignedUserIds, assignedBy);
   return { ...duty, assignedUserIds: payload.assignedUserIds };
 }
 

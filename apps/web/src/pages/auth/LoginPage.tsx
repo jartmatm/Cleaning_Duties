@@ -3,8 +3,8 @@ import { Card } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { authLoginSchema, ownerSignupSchema, type AuthLoginInput, type OwnerSignupInput } from "@cleaning-duties/shared";
-import { requestPasswordReset, signInWithCredentials, signUpOwner } from "../../services/auth-service";
+import { authLoginSchema, managerSignupSchema, type AuthLoginInput, type ManagerSignupInput } from "@cleaning-duties/shared";
+import { requestPasswordReset, signInWithCredentials, signUpManager } from "../../services/auth-service";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import type { FormEvent } from "react";
@@ -52,11 +52,11 @@ export function LoginPage() {
       rememberMe: false,
     },
   });
-  const signupForm = useForm<OwnerSignupInput>({
-    resolver: zodResolver(ownerSignupSchema),
+  const signupForm = useForm<ManagerSignupInput>({
+    resolver: zodResolver(managerSignupSchema),
     defaultValues: {
       companyName: "",
-      ownerName: "",
+      managerName: "",
       email: "",
       password: "",
       confirmPassword: "",
@@ -86,9 +86,9 @@ export function LoginPage() {
     navigate("/dashboard");
   }
 
-  async function onSignupSubmit(values: OwnerSignupInput) {
+  async function onSignupSubmit(values: ManagerSignupInput) {
     setErrorMessage(null);
-    const result = await signUpOwner(values);
+    const result = await signUpManager(values);
 
     if (!result.ok) {
       setErrorMessage(result.message);
@@ -97,12 +97,12 @@ export function LoginPage() {
     }
 
     if (result.needsEmailConfirmation) {
-      notify({ tone: "success", title: "Company created", message: "Check your email to confirm the owner account." });
+      notify({ tone: "success", title: "Company created", message: "Check your email to confirm the manager account." });
       switchMode("login");
       return;
     }
 
-    notify({ tone: "success", title: "Company created", message: "Your owner account is ready." });
+    notify({ tone: "success", title: "Company created", message: "Your manager account is ready." });
     navigate("/dashboard");
   }
 
@@ -204,13 +204,13 @@ export function LoginPage() {
               {signupErrors.companyName ? <p className="mt-1 text-sm text-red-600">{signupErrors.companyName.message}</p> : null}
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-black">Owner name</label>
-              <Input placeholder="Your name" {...registerSignup("ownerName")} />
-              {signupErrors.ownerName ? <p className="mt-1 text-sm text-red-600">{signupErrors.ownerName.message}</p> : null}
+              <label className="mb-2 block text-sm font-medium text-black">Manager name</label>
+              <Input placeholder="Your name" {...registerSignup("managerName")} />
+              {signupErrors.managerName ? <p className="mt-1 text-sm text-red-600">{signupErrors.managerName.message}</p> : null}
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-black">Email</label>
-              <Input type="email" placeholder="owner@company.com" {...registerSignup("email")} />
+              <Input type="email" placeholder="manager@company.com" {...registerSignup("email")} />
               {signupErrors.email ? <p className="mt-1 text-sm text-red-600">{signupErrors.email.message}</p> : null}
             </div>
             <div>

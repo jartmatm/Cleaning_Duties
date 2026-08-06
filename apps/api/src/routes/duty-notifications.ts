@@ -31,6 +31,7 @@ type ProfileRow = {
   id: string;
   full_name: string;
   company_id: string;
+  role: "Manager" | "Supervisor" | "Cleaner";
 };
 
 export const dutyNotificationsRouter = Router();
@@ -143,10 +144,13 @@ dutyNotificationsRouter.post("/assignments", async (req, res) => {
     if (dutyError || !duty) {
       return res.status(404).json({ error: dutyError?.message ?? "Duty not found" });
     }
+    if (duty.site_id !== siteId) {
+      return res.status(400).json({ error: "The duty does not belong to the selected site" });
+    }
 
     const { data: assignerProfile, error: assignerError } = await supabase
       .from("profiles")
-      .select("id, full_name, company_id")
+      .select("id, full_name, company_id, role")
       .eq("id", assignedBy)
       .single<ProfileRow>();
 
@@ -156,12 +160,27 @@ dutyNotificationsRouter.post("/assignments", async (req, res) => {
     if (assignerProfile.company_id !== duty.sites?.company_id) {
       return res.status(403).json({ error: "You are not allowed to notify assignments for this duty" });
     }
+    if (assignerProfile.role === "Cleaner") {
+      return res.status(403).json({ error: "Cleaners cannot assign duties" });
+    }
+    if (assignerProfile.role === "Supervisor") {
+      const { data: supervisorSite } = await supabase
+        .from("site_members")
+        .select("id")
+        .eq("site_id", duty.site_id)
+        .eq("profile_id", assignerProfile.id)
+        .maybeSingle();
+      if (!supervisorSite) {
+        return res.status(403).json({ error: "This duty is outside your assigned sites" });
+      }
+    }
 
     const requestedRecipientIds = Array.from(new Set(assignedUserIds)).filter(Boolean);
     const { data: recipientProfiles, error: recipientProfilesError } = await supabase
       .from("profiles")
-      .select("id, full_name, company_id")
+      .select("id, full_name, company_id, role")
       .eq("company_id", duty.sites.company_id)
+      .eq("role", "Cleaner")
       .in("id", requestedRecipientIds)
       .returns<ProfileRow[]>();
 
@@ -169,8 +188,22 @@ dutyNotificationsRouter.post("/assignments", async (req, res) => {
       return res.status(500).json({ error: recipientProfilesError.message });
     }
 
+    const candidateRecipientIds = (recipientProfiles ?? []).map((profile) => profile.id);
+    const [{ data: recipientMemberships, error: recipientMembershipsError }, { data: savedAssignments, error: savedAssignmentsError }] = await Promise.all([
+      candidateRecipientIds.length > 0
+        ? supabase.from("site_members").select("profile_id").eq("site_id", duty.site_id).in("profile_id", candidateRecipientIds)
+        : Promise.resolve({ data: [], error: null }),
+      candidateRecipientIds.length > 0
+        ? supabase.from("duty_assignments").select("profile_id").eq("duty_id", duty.id).in("profile_id", candidateRecipientIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (recipientMembershipsError) return res.status(500).json({ error: recipientMembershipsError.message });
+    if (savedAssignmentsError) return res.status(500).json({ error: savedAssignmentsError.message });
+
+    const memberIds = new Set((recipientMemberships ?? []).map((membership) => membership.profile_id));
+    const assignedIds = new Set((savedAssignments ?? []).map((assignment) => assignment.profile_id));
     const recipientProfilesById = new Map((recipientProfiles ?? []).map((profile) => [profile.id, profile]));
-    const recipientIds = requestedRecipientIds.filter((profileId) => recipientProfilesById.has(profileId));
+    const recipientIds = requestedRecipientIds.filter((profileId) => recipientProfilesById.has(profileId) && memberIds.has(profileId) && assignedIds.has(profileId));
     const notifications = recipientIds.map((profileId) => ({
       profile_id: profileId,
       type: "duty_assigned",

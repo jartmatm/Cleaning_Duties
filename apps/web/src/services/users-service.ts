@@ -1,6 +1,6 @@
 import { supabase } from "./supabase-client";
 
-export type CompanyUserRole = "Owner" | "Manager" | "Cleaner";
+export type CompanyUserRole = "Manager" | "Supervisor" | "Cleaner";
 
 type ProfileRow = {
   id: string;
@@ -36,7 +36,7 @@ export async function listCompanyUsers(companyId: string): Promise<CompanyUser[]
     .from("profiles")
     .select("id, full_name, email, phone, role, created_at")
     .eq("company_id", companyId)
-    .in("role", ["Manager", "Cleaner"])
+    .in("role", ["Supervisor", "Cleaner"])
     .order("role", { ascending: true })
     .order("full_name", { ascending: true });
 
@@ -86,7 +86,7 @@ export async function listCompanyUsers(companyId: string): Promise<CompanyUser[]
   }));
 }
 
-async function cleanerErrorMessage(error: unknown) {
+async function teamMemberErrorMessage(error: unknown) {
   if (error && typeof error === "object" && "context" in error && (error as { context?: unknown }).context instanceof Response) {
     const response = (error as { context: Response }).context;
     try {
@@ -107,14 +107,14 @@ async function cleanerErrorMessage(error: unknown) {
     return error.message;
   }
 
-  return "The cleaner could not be updated.";
+  return "The team member could not be updated.";
 }
 
-export async function updateCleaner(input: { cleanerId: string; companyId: string; fullName: string; email: string; password?: string; siteIds: string[] }) {
+export async function updateTeamMember(input: { memberId: string; companyId: string; fullName: string; email: string; password?: string; siteIds: string[] }) {
   const { data, error } = await supabase.functions.invoke("manage-cleaner", {
     method: "PATCH",
     body: {
-      cleaner_id: input.cleanerId,
+      member_id: input.memberId,
       company_id: input.companyId,
       full_name: input.fullName,
       email: input.email,
@@ -124,22 +124,22 @@ export async function updateCleaner(input: { cleanerId: string; companyId: strin
   });
 
   if (error) {
-    throw new Error(await cleanerErrorMessage(error));
+    throw new Error(await teamMemberErrorMessage(error));
   }
 
   return data as { userId: string };
 }
 
-export async function deleteCleaner(input: { cleanerId: string; companyId: string }) {
+export async function deleteTeamMember(input: { memberId: string; companyId: string }) {
   const { error } = await supabase.functions.invoke("manage-cleaner", {
     method: "DELETE",
     body: {
-      cleaner_id: input.cleanerId,
+      member_id: input.memberId,
       company_id: input.companyId,
     },
   });
 
   if (error) {
-    throw new Error(await cleanerErrorMessage(error));
+    throw new Error(await teamMemberErrorMessage(error));
   }
 }

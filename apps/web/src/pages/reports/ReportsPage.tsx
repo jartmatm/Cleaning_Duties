@@ -14,7 +14,7 @@ import { listAssignableMembers } from "../../services/assignments-service";
 import { listDuties, type DutyItem } from "../../services/duties-service";
 import { getCurrentProfile } from "../../services/profile-service";
 import { createServiceReport, deleteServiceReport, listServiceReports, type ServiceReportItem, type ServiceReportSnapshot } from "../../services/reports-service";
-import { listSites } from "../../services/sites-service";
+import { listMySites, listSites } from "../../services/sites-service";
 import { formatDate, formatDateTime } from "../../utils/date-format";
 
 type DateRange = {
@@ -149,7 +149,8 @@ function isMobileDevice() {
 
 export function ReportsPage() {
   const queryClient = useQueryClient();
-  const { companyId, userId, activeSiteId } = useSession();
+  const { companyId, userId, role, activeSiteId } = useSession();
+  const usesAssignedSites = role === "Supervisor";
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isMediaOpen, setIsMediaOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState<ServiceReportItem | null>(null);
@@ -174,9 +175,9 @@ export function ReportsPage() {
     enabled: Boolean(userId),
   });
   const { data: sites = [] } = useQuery({
-    queryKey: ["reports-sites", companyId],
-    queryFn: () => listSites(companyId ?? ""),
-    enabled: Boolean(companyId),
+    queryKey: usesAssignedSites ? ["reports-sites", companyId, userId] : ["reports-sites", companyId],
+    queryFn: () => usesAssignedSites ? listMySites(userId ?? "") : listSites(companyId ?? ""),
+    enabled: usesAssignedSites ? Boolean(userId) : Boolean(companyId),
   });
   const activeSite = sites.find((site) => site.id === activeSiteId) ?? sites[0] ?? null;
   const { data: reports = [] } = useQuery({

@@ -57,7 +57,7 @@ Deno.serve(async (request) => {
     full_name?: string;
     email?: string;
     password?: string;
-    role?: "Owner" | "Manager" | "Cleaner";
+    role?: "Supervisor" | "Cleaner";
     company_id?: string;
     site_ids?: string[];
   };
@@ -79,7 +79,7 @@ Deno.serve(async (request) => {
   if (!email.includes("@")) return jsonResponse({ error: "Enter a valid email" }, 400);
   if (password.length < 8) return jsonResponse({ error: "Password must be at least 8 characters" }, 400);
   if (!uuidPattern.test(companyId)) return jsonResponse({ error: "A valid company is required" }, 400);
-  if (!["Manager", "Cleaner"].includes(role)) return jsonResponse({ error: "Only manager and cleaner invitations are supported" }, 400);
+  if (!["Supervisor", "Cleaner"].includes(role)) return jsonResponse({ error: "Only supervisor and cleaner invitations are supported" }, 400);
   if (siteIds.length === 0 || siteIds.some((siteId) => !uuidPattern.test(siteId))) {
     return jsonResponse({ error: "Select at least one valid site" }, 400);
   }
@@ -93,8 +93,11 @@ Deno.serve(async (request) => {
   if (requesterError) {
     return jsonResponse({ error: errorMessage(requesterError, "Could not verify your profile") }, 500);
   }
-  if (!requester || requester.company_id !== companyId || !["Owner", "Manager"].includes(requester.role)) {
+  if (!requester || requester.company_id !== companyId || !["Manager", "Supervisor"].includes(requester.role)) {
     return jsonResponse({ error: "You are not allowed to invite users to this company" }, 403);
+  }
+  if (requester.role === "Supervisor" && role !== "Cleaner") {
+    return jsonResponse({ error: "Supervisors can only create cleaner accounts" }, 403);
   }
 
   const { data: company, error: companyError } = await admin.from("companies").select("id").eq("id", companyId).maybeSingle();
@@ -105,6 +108,21 @@ Deno.serve(async (request) => {
   if (sitesError) return jsonResponse({ error: errorMessage(sitesError, "Could not verify selected sites") }, 500);
   if ((sites ?? []).length !== siteIds.length) {
     return jsonResponse({ error: "All selected sites must belong to the company" }, 400);
+  }
+
+  if (requester.role === "Supervisor") {
+    const { data: allowedSites, error: allowedSitesError } = await admin
+      .from("site_members")
+      .select("site_id")
+      .eq("profile_id", authData.user.id)
+      .in("site_id", siteIds);
+
+    if (allowedSitesError) {
+      return jsonResponse({ error: errorMessage(allowedSitesError, "Could not verify supervisor site access") }, 500);
+    }
+    if ((allowedSites ?? []).length !== siteIds.length) {
+      return jsonResponse({ error: "Cleaners can only be assigned to sites supervised by you" }, 403);
+    }
   }
 
   const { data: createdUser, error: createUserError } = await admin.auth.admin.createUser({

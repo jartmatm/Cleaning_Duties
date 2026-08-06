@@ -1,4 +1,4 @@
-export type UserRole = "Owner" | "Manager" | "Cleaner";
+export type UserRole = "Manager" | "Supervisor" | "Cleaner";
 
 export type SiteRecord = {
   id: string;

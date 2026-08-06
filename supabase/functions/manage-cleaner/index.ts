@@ -54,6 +54,7 @@ Deno.serve(async (request) => {
   }
 
   let payload: {
+    member_id?: string;
     cleaner_id?: string;
     company_id?: string;
     full_name?: string;
@@ -68,10 +69,10 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "Invalid JSON body" }, 400);
   }
 
-  const cleanerId = payload.cleaner_id ?? "";
+  const memberId = payload.member_id ?? payload.cleaner_id ?? "";
   const companyId = payload.company_id ?? "";
 
-  if (!uuidPattern.test(cleanerId)) return jsonResponse({ error: "A valid cleaner is required" }, 400);
+  if (!uuidPattern.test(memberId)) return jsonResponse({ error: "A valid team member is required" }, 400);
   if (!uuidPattern.test(companyId)) return jsonResponse({ error: "A valid company is required" }, 400);
 
   const { data: requester, error: requesterError } = await admin
@@ -83,32 +84,86 @@ Deno.serve(async (request) => {
   if (requesterError) {
     return jsonResponse({ error: errorMessage(requesterError, "Could not verify your profile") }, 500);
   }
-  if (!requester || requester.company_id !== companyId || !["Owner", "Manager"].includes(requester.role)) {
-    return jsonResponse({ error: "You are not allowed to manage cleaners for this company" }, 403);
+  if (!requester || requester.company_id !== companyId || !["Manager", "Supervisor"].includes(requester.role)) {
+    return jsonResponse({ error: "You are not allowed to manage team members for this company" }, 403);
   }
 
-  const { data: cleaner, error: cleanerError } = await admin
+  const { data: member, error: memberError } = await admin
     .from("profiles")
     .select("id, company_id, role")
-    .eq("id", cleanerId)
+    .eq("id", memberId)
     .maybeSingle();
 
-  if (cleanerError) return jsonResponse({ error: errorMessage(cleanerError, "Could not verify cleaner") }, 500);
-  if (!cleaner || cleaner.company_id !== companyId || cleaner.role !== "Cleaner") {
-    return jsonResponse({ error: "Cleaner not found in this company" }, 404);
+  if (memberError) return jsonResponse({ error: errorMessage(memberError, "Could not verify team member") }, 500);
+  if (!member || member.company_id !== companyId || !["Supervisor", "Cleaner"].includes(member.role)) {
+    return jsonResponse({ error: "Team member not found in this company" }, 404);
+  }
+  if (requester.role === "Supervisor" && member.role !== "Cleaner") {
+    return jsonResponse({ error: "Supervisors can only manage cleaner accounts" }, 403);
+  }
+
+  const { data: requesterMemberships, error: requesterMembershipsError } = requester.role === "Supervisor"
+    ? await admin.from("site_members").select("site_id").eq("profile_id", authData.user.id)
+    : { data: [], error: null };
+  if (requesterMembershipsError) {
+    return jsonResponse({ error: errorMessage(requesterMembershipsError, "Could not verify supervisor site access") }, 500);
+  }
+  const requesterSiteIds = (requesterMemberships ?? []).map((membership) => membership.site_id as string);
+
+  const { data: currentMemberships, error: currentMembershipsError } = await admin
+    .from("site_members")
+    .select("site_id")
+    .eq("profile_id", memberId);
+  if (currentMembershipsError) {
+    return jsonResponse({ error: errorMessage(currentMembershipsError, "Could not verify current site access") }, 500);
+  }
+  const currentSiteIds = (currentMemberships ?? []).map((membership) => membership.site_id as string);
+
+  if (requester.role === "Supervisor" && !currentSiteIds.some((siteId) => requesterSiteIds.includes(siteId))) {
+    return jsonResponse({ error: "This cleaner is not assigned to one of your sites" }, 403);
   }
 
   if (request.method === "DELETE") {
-    const { error: assignmentError } = await admin.from("duty_assignments").delete().eq("profile_id", cleanerId);
-    if (assignmentError) return jsonResponse({ error: errorMessage(assignmentError, "Could not remove duty assignments") }, 500);
+    const removableSiteIds = requester.role === "Manager" ? currentSiteIds : requesterSiteIds;
+    const { data: removableDuties, error: removableDutiesError } = removableSiteIds.length > 0
+      ? await admin.from("cleaning_duties").select("id").in("site_id", removableSiteIds)
+      : { data: [], error: null };
+    if (removableDutiesError) {
+      return jsonResponse({ error: errorMessage(removableDutiesError, "Could not verify duty assignments") }, 500);
+    }
 
-    const { error: membershipError } = await admin.from("site_members").delete().eq("profile_id", cleanerId);
+    const removableDutyIds = (removableDuties ?? []).map((duty) => duty.id as string);
+    if (removableDutyIds.length > 0) {
+      const { error: assignmentError } = await admin
+        .from("duty_assignments")
+        .delete()
+        .eq("profile_id", memberId)
+        .in("duty_id", removableDutyIds);
+      if (assignmentError) return jsonResponse({ error: errorMessage(assignmentError, "Could not remove duty assignments") }, 500);
+    }
+
+    let membershipDelete = admin.from("site_members").delete().eq("profile_id", memberId);
+    if (requester.role === "Supervisor") {
+      membershipDelete = membershipDelete.in("site_id", requesterSiteIds);
+    }
+    const { error: membershipError } = await membershipDelete;
     if (membershipError) return jsonResponse({ error: errorMessage(membershipError, "Could not remove site access") }, 500);
 
-    const { error: deleteUserError } = await admin.auth.admin.deleteUser(cleanerId);
-    if (deleteUserError) return jsonResponse({ error: errorMessage(deleteUserError, "Could not delete cleaner account") }, 500);
+    const { count: remainingMembershipCount, error: remainingMembershipError } = await admin
+      .from("site_members")
+      .select("id", { count: "exact", head: true })
+      .eq("profile_id", memberId);
+    if (remainingMembershipError) {
+      return jsonResponse({ error: errorMessage(remainingMembershipError, "Could not verify remaining site access") }, 500);
+    }
 
-    return jsonResponse({ userId: cleanerId });
+    const shouldDeleteAccount = requester.role === "Manager" || (remainingMembershipCount ?? 0) === 0;
+    if (shouldDeleteAccount) {
+      const { error: deleteUserError } = await admin.auth.admin.deleteUser(memberId);
+      if (deleteUserError) return jsonResponse({ error: errorMessage(deleteUserError, "Could not delete team member account") }, 500);
+    }
+
+    return jsonResponse({ userId: memberId, accountDeleted: shouldDeleteAccount });
   }
 
   const fullName = payload.full_name?.trim() ?? "";
@@ -116,7 +171,7 @@ Deno.serve(async (request) => {
   const password = payload.password ?? "";
   const siteIds = Array.isArray(payload.site_ids) ? [...new Set(payload.site_ids)] : [];
 
-  if (fullName.length < 2) return jsonResponse({ error: "Enter the cleaner name" }, 400);
+  if (fullName.length < 2) return jsonResponse({ error: "Enter the team member name" }, 400);
   if (!email.includes("@")) return jsonResponse({ error: "Enter a valid email" }, 400);
   if (password && password.length < 8) return jsonResponse({ error: "Password must be at least 8 characters" }, 400);
   if (siteIds.length === 0 || siteIds.some((siteId) => !uuidPattern.test(siteId))) {
@@ -129,32 +184,68 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "All selected sites must belong to the company" }, 400);
   }
 
+  if (requester.role === "Supervisor" && siteIds.some((siteId) => !requesterSiteIds.includes(siteId))) {
+    return jsonResponse({ error: "Cleaners can only be assigned to sites supervised by you" }, 403);
+  }
+
+  const retainedSiteIds = requester.role === "Supervisor"
+    ? currentSiteIds.filter((siteId) => !requesterSiteIds.includes(siteId))
+    : [];
+  const finalSiteIds = [...new Set([...retainedSiteIds, ...siteIds])];
+
   const authUpdates: { email: string; password?: string; user_metadata: Record<string, unknown>; app_metadata: Record<string, unknown> } = {
     email,
-    user_metadata: { full_name: fullName, role: "Cleaner", company_id: companyId, site_ids: siteIds },
-    app_metadata: { role: "Cleaner", company_id: companyId, site_ids: siteIds },
+    user_metadata: { full_name: fullName, role: member.role, company_id: companyId, site_ids: finalSiteIds },
+    app_metadata: { role: member.role, company_id: companyId, site_ids: finalSiteIds },
   };
   if (password) {
     authUpdates.password = password;
   }
 
-  const { error: authUpdateError } = await admin.auth.admin.updateUserById(cleanerId, authUpdates);
-  if (authUpdateError) return jsonResponse({ error: errorMessage(authUpdateError, "Could not update cleaner login") }, 500);
+  const { error: authUpdateError } = await admin.auth.admin.updateUserById(memberId, authUpdates);
+  if (authUpdateError) return jsonResponse({ error: errorMessage(authUpdateError, "Could not update team member login") }, 500);
 
   const { error: profileError } = await admin
     .from("profiles")
     .update({ full_name: fullName, email, updated_at: new Date().toISOString() })
-    .eq("id", cleanerId);
-  if (profileError) return jsonResponse({ error: errorMessage(profileError, "Could not update cleaner profile") }, 500);
+    .eq("id", memberId);
+  if (profileError) return jsonResponse({ error: errorMessage(profileError, "Could not update team member profile") }, 500);
 
-  const { error: deleteMembershipError } = await admin.from("site_members").delete().eq("profile_id", cleanerId);
+  let membershipDelete = admin.from("site_members").delete().eq("profile_id", memberId);
+  if (requester.role === "Supervisor") {
+    membershipDelete = membershipDelete.in("site_id", requesterSiteIds);
+  }
+  const { error: deleteMembershipError } = await membershipDelete;
   if (deleteMembershipError) return jsonResponse({ error: errorMessage(deleteMembershipError, "Could not update site access") }, 500);
 
   const { error: membershipError } = await admin.from("site_members").upsert(
-    siteIds.map((siteId) => ({ site_id: siteId, profile_id: cleanerId, role: "Cleaner" })),
+    siteIds.map((siteId) => ({ site_id: siteId, profile_id: memberId, role: member.role })),
     { onConflict: "site_id,profile_id" },
   );
-  if (membershipError) return jsonResponse({ error: errorMessage(membershipError, "Could not assign cleaner to selected sites") }, 500);
+  if (membershipError) return jsonResponse({ error: errorMessage(membershipError, "Could not assign team member to selected sites") }, 500);
 
-  return jsonResponse({ userId: cleanerId });
+  const removedSiteIds = currentSiteIds.filter((siteId) => !finalSiteIds.includes(siteId));
+  if (removedSiteIds.length > 0 && member.role === "Cleaner") {
+    const { data: removedSiteDuties, error: removedSiteDutiesError } = await admin
+      .from("cleaning_duties")
+      .select("id")
+      .in("site_id", removedSiteIds);
+    if (removedSiteDutiesError) {
+      return jsonResponse({ error: errorMessage(removedSiteDutiesError, "Could not verify removed site assignments") }, 500);
+    }
+
+    const removedDutyIds = (removedSiteDuties ?? []).map((duty) => duty.id as string);
+    if (removedDutyIds.length > 0) {
+      const { error: removedAssignmentsError } = await admin
+        .from("duty_assignments")
+        .delete()
+        .eq("profile_id", memberId)
+        .in("duty_id", removedDutyIds);
+      if (removedAssignmentsError) {
+        return jsonResponse({ error: errorMessage(removedAssignmentsError, "Could not remove duties from unassigned sites") }, 500);
+      }
+    }
+  }
+
+  return jsonResponse({ userId: memberId });
 });

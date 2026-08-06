@@ -45,13 +45,13 @@ export function PreloadedDutiesPage() {
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ["preloaded-duties", companyId],
     queryFn: () => listPreloadedDuties(companyId ?? ""),
-    enabled: Boolean(companyId) && role !== "Cleaner",
+    enabled: Boolean(companyId) && role === "Manager",
   });
 
   const { data: sites = [] } = useQuery({
     queryKey: ["sites", companyId],
     queryFn: () => listSites(companyId ?? ""),
-    enabled: Boolean(companyId) && role !== "Cleaner",
+    enabled: Boolean(companyId) && role === "Manager",
   });
 
   const uploadSite = sites[0] ?? null;
@@ -126,7 +126,7 @@ export function PreloadedDutiesPage() {
     onError: (error) => notify({ tone: "error", title: "Could not delete preloaded duty", message: error instanceof Error ? error.message : "Unknown error" }),
   });
 
-  if (role === "Cleaner") {
+  if (role !== "Manager") {
     return <Navigate to="/settings" replace />;
   }
 
@@ -254,7 +254,7 @@ export function PreloadedDutiesPage() {
       <PageHeader
         eyebrow="Settings"
         title="Preloaded Duties"
-        description="Create reusable duty templates for managers and owners to preload into new duties."
+        description="Create reusable duty templates for managers and supervisors to preload into new duties."
         actions={(
           <Button onClick={startCreate} disabled={createMutation.isPending || updateMutation.isPending}>
             <Plus className="h-4 w-4" />

@@ -15,14 +15,15 @@ export function SiteInfoPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { siteId } = useParams();
   const { companyId, userId, role } = useSession();
-  const canEdit = role === "Owner" || role === "Manager";
+  const canEdit = role === "Manager";
+  const usesAssignedSites = role !== "Manager";
   const [notes, setNotes] = useState("");
   const [infoPhotos, setInfoPhotos] = useState<string[]>([]);
 
   const { data: sites = [], isLoading } = useQuery({
-    queryKey: role === "Cleaner" ? ["sites", "cleaner", userId, "info"] : ["sites", companyId, "info"],
-    queryFn: () => role === "Cleaner" ? listMySites(userId ?? "") : listSites(companyId ?? ""),
-    enabled: role === "Cleaner" ? Boolean(userId) : Boolean(companyId),
+    queryKey: usesAssignedSites ? ["sites", role, userId, "info"] : ["sites", companyId, "info"],
+    queryFn: () => usesAssignedSites ? listMySites(userId ?? "") : listSites(companyId ?? ""),
+    enabled: usesAssignedSites ? Boolean(userId) : Boolean(companyId),
   });
 
   const site = sites.find((item) => item.id === siteId) ?? null;

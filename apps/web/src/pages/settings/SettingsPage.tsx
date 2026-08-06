@@ -31,13 +31,14 @@ export function SettingsPage() {
   const [archiveCleanupDays, setArchiveCleanupDays] = useState("10");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const isCleaner = role === "Cleaner";
-  const canManagePreloadedDuties = role === "Owner" || role === "Manager";
+  const canManageCompany = role === "Manager";
+  const isPersonalSettings = !canManageCompany;
+  const canManagePreloadedDuties = role === "Manager";
 
   const { data: company, isLoading: isLoadingCompany } = useQuery({
     queryKey: ["company-settings", companyId],
     queryFn: () => getCompanySettings(companyId ?? ""),
-    enabled: Boolean(companyId) && !isCleaner,
+    enabled: Boolean(companyId) && canManageCompany,
   });
 
   const { data: profile, isLoading: isLoadingProfile } = useQuery({
@@ -92,7 +93,7 @@ export function SettingsPage() {
         throw new Error("Name is required");
       }
 
-      if (isCleaner) {
+      if (isPersonalSettings) {
         await updateProfileName(userId, trimmedManagerName);
         return null;
       }
@@ -129,7 +130,7 @@ export function SettingsPage() {
       notify({
         tone: "success",
         title: "Settings saved",
-        message: isCleaner ? "Your profile was updated successfully." : "Company settings were updated successfully.",
+        message: isPersonalSettings ? "Your profile was updated successfully." : "Company settings were updated successfully.",
       });
     },
     onError: (error) => {
@@ -251,26 +252,26 @@ export function SettingsPage() {
     archiveCleanupMutation.mutate({ enabled, days: Number(normalizedDays) });
   }
 
-  const isLoading = (!isCleaner && isLoadingCompany) || isLoadingProfile;
+  const isLoading = (canManageCompany && isLoadingCompany) || isLoadingProfile;
   const displayedLogoUrl = logoPreviewUrl ?? logoUrl;
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Settings"
-        title={isCleaner ? "Profile settings" : "Company settings"}
+        title={isPersonalSettings ? "Profile settings" : "Company settings"}
         description={
-          isCleaner
+          isPersonalSettings
             ? "Update your personal details and account password."
             : "Manage the company identity, manager profile, and brand palette used across the workspace."
         }
       />
 
-      <div className={isCleaner ? "grid gap-6" : "grid gap-6 xl:grid-cols-[1fr_0.7fr]"}>
+      <div className={isPersonalSettings ? "grid gap-6" : "grid gap-6 xl:grid-cols-[1fr_0.7fr]"}>
         <Card className="space-y-6 p-5">
           <SectionTitle
-            title={isCleaner ? "Personal profile" : "Company profile"}
-            description={isCleaner ? "Update the name shown on your cleaner account." : "Update the core details cleaners and managers see in the app."}
+            title={isPersonalSettings ? "Personal profile" : "Company profile"}
+            description={isPersonalSettings ? "Update the name shown on your account." : "Update the core details supervisors and cleaners see in the app."}
           />
 
           {isLoading ? (
@@ -283,7 +284,7 @@ export function SettingsPage() {
                 saveMutation.mutate();
               }}
             >
-              {!isCleaner ? (
+              {canManageCompany ? (
                 <div className="grid gap-4 md:grid-cols-[auto_1fr] md:items-center">
                   <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                     {displayedLogoUrl ? (
@@ -304,19 +305,19 @@ export function SettingsPage() {
               ) : null}
 
               <div className="grid gap-4 md:grid-cols-2">
-                {!isCleaner ? (
+                {canManageCompany ? (
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-700">Company name</label>
                     <Input value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="Company name" />
                   </div>
                 ) : null}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">{isCleaner ? "Name" : "Manager name"}</label>
-                  <Input value={managerName} onChange={(event) => setManagerName(event.target.value)} placeholder={isCleaner ? "Your name" : "Manager name"} />
+                  <label className="text-sm font-medium text-slate-700">{isPersonalSettings ? "Name" : "Manager name"}</label>
+                  <Input value={managerName} onChange={(event) => setManagerName(event.target.value)} placeholder={isPersonalSettings ? "Your name" : "Manager name"} />
                 </div>
               </div>
 
-              {!isCleaner ? (
+              {canManageCompany ? (
                 <div className="space-y-3">
                   <label className="text-sm font-medium text-slate-700">Company palette</label>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -361,7 +362,7 @@ export function SettingsPage() {
           )}
         </Card>
 
-        {!isCleaner ? (
+        {canManageCompany ? (
           <Card className="space-y-5 p-5" style={{ backgroundColor: activePalette.surface }}>
             <SectionTitle title="Brand preview" description="A quick look at the selected identity." />
             <div className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-black/5">

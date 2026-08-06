@@ -12,9 +12,9 @@ import { PageHeader } from "../../components/common/page-header";
 import { SectionTitle } from "../../components/common/section-title";
 import { ConfirmationDialog } from "../../components/common/confirmation-dialog";
 import { notify } from "../../components/common/toast";
-import { inviteCleaner, inviteManager } from "../../services/invite-service";
-import { listSites, type SiteItem } from "../../services/sites-service";
-import { deleteCleaner, listCompanyUsers, updateCleaner, type CompanyUser } from "../../services/users-service";
+import { inviteCleaner, inviteSupervisor } from "../../services/invite-service";
+import { listMySites, listSites, type SiteItem } from "../../services/sites-service";
+import { deleteTeamMember, listCompanyUsers, updateTeamMember, type CompanyUser } from "../../services/users-service";
 
 const inviteCleanerSchema = z.object({
   fullName: z.string().trim().min(2, "Enter the name."),
@@ -24,23 +24,25 @@ const inviteCleanerSchema = z.object({
 });
 
 type InviteCleanerInput = z.infer<typeof inviteCleanerSchema>;
-type InviteMode = "Cleaner" | "Manager";
+type InviteMode = "Cleaner" | "Supervisor";
 
 export function UsersPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { companyId, role } = useSession();
+  const { companyId, userId, role } = useSession();
   const isCleaner = role === "Cleaner";
+  const canManageCleaners = role === "Manager" || role === "Supervisor";
+  const canManageSupervisors = role === "Manager";
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [inviteMode, setInviteMode] = useState<InviteMode>("Cleaner");
-  const [editingCleaner, setEditingCleaner] = useState<CompanyUser | null>(null);
+  const [editingMember, setEditingMember] = useState<CompanyUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CompanyUser | null>(null);
   const [isDeletingCleaner, setIsDeletingCleaner] = useState(false);
 
   const { data: sites = [] } = useQuery({
-    queryKey: ["invite-sites", companyId],
-    queryFn: () => listSites(companyId ?? ""),
-    enabled: Boolean(companyId),
+    queryKey: role === "Manager" ? ["invite-sites", companyId] : ["invite-sites", companyId, userId],
+    queryFn: () => role === "Manager" ? listSites(companyId ?? "") : listMySites(userId ?? ""),
+    enabled: Boolean(companyId) && Boolean(userId) && canManageCleaners,
   });
 
   const {
@@ -70,7 +72,7 @@ export function UsersPage() {
   }, [sites.length]);
 
   useEffect(() => {
-    if (isCleaner || searchParams.get("invite") !== "1") {
+    if (!canManageCleaners || searchParams.get("invite") !== "1") {
       return;
     }
 
@@ -79,7 +81,7 @@ export function UsersPage() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("invite");
     setSearchParams(nextParams, { replace: true });
-  }, [isCleaner, searchParams, setSearchParams]);
+  }, [canManageCleaners, searchParams, setSearchParams]);
 
   async function onSubmit(values: InviteCleanerInput) {
     try {
@@ -87,9 +89,9 @@ export function UsersPage() {
         throw new Error("No company is selected for this invitation.");
       }
 
-      if (editingCleaner) {
-        await updateCleaner({
-          cleanerId: editingCleaner.id,
+      if (editingMember) {
+        await updateTeamMember({
+          memberId: editingMember.id,
           fullName: values.fullName,
           email: values.email,
           password: values.password,
@@ -99,7 +101,7 @@ export function UsersPage() {
 
         notify({
           tone: "success",
-          title: "Cleaner updated",
+          title: `${editingMember.role} updated`,
           message: `${values.fullName} was updated successfully.`,
         });
       } else {
@@ -108,7 +110,7 @@ export function UsersPage() {
           return;
         }
 
-        const invite = inviteMode === "Manager" ? inviteManager : inviteCleaner;
+        const invite = inviteMode === "Supervisor" ? inviteSupervisor : inviteCleaner;
         await invite({
           fullName: values.fullName,
           email: values.email,
@@ -129,33 +131,33 @@ export function UsersPage() {
     } catch (error) {
       notify({
         tone: "error",
-        title: editingCleaner ? "Update failed" : "Invite failed",
-        message: error instanceof Error ? error.message : editingCleaner ? "The cleaner account could not be updated." : `The ${inviteMode.toLowerCase()} account could not be created.`,
+        title: editingMember ? "Update failed" : "Invite failed",
+        message: error instanceof Error ? error.message : editingMember ? "The team member account could not be updated." : `The ${inviteMode.toLowerCase()} account could not be created.`,
       });
     }
   }
 
   function openCreateCleanerForm() {
     setInviteMode("Cleaner");
-    setEditingCleaner(null);
+    setEditingMember(null);
     form.reset({ fullName: "", email: "", password: "", siteIds: [] });
     setIsInviteOpen(true);
   }
 
-  function openCreateManagerForm() {
-    setInviteMode("Manager");
-    setEditingCleaner(null);
+  function openCreateSupervisorForm() {
+    setInviteMode("Supervisor");
+    setEditingMember(null);
     form.reset({ fullName: "", email: "", password: "", siteIds: [] });
     setIsInviteOpen(true);
   }
 
-  function openEditCleanerForm(user: CompanyUser) {
-    if (user.role !== "Cleaner") {
+  function openEditMemberForm(user: CompanyUser) {
+    if (!canManageCleaners || (user.role === "Supervisor" && !canManageSupervisors)) {
       return;
     }
 
-    setInviteMode("Cleaner");
-    setEditingCleaner(user);
+    setInviteMode(user.role === "Supervisor" ? "Supervisor" : "Cleaner");
+    setEditingMember(user);
     form.reset({
       fullName: user.name,
       email: user.email ?? "",
@@ -167,7 +169,7 @@ export function UsersPage() {
 
   function closeCleanerForm() {
     setIsInviteOpen(false);
-    setEditingCleaner(null);
+    setEditingMember(null);
     form.reset();
   }
 
@@ -177,6 +179,10 @@ export function UsersPage() {
     form.setValue("siteIds", next, { shouldValidate: true, shouldDirty: true });
   }
 
+  function canManageMember(user: CompanyUser) {
+    return canManageCleaners && (user.role === "Cleaner" || canManageSupervisors);
+  }
+
   async function confirmDeleteCleaner() {
     if (!deleteTarget || !companyId) {
       return;
@@ -184,10 +190,10 @@ export function UsersPage() {
 
     try {
       setIsDeletingCleaner(true);
-      await deleteCleaner({ cleanerId: deleteTarget.id, companyId });
+      await deleteTeamMember({ memberId: deleteTarget.id, companyId });
       notify({
         tone: "success",
-        title: "Cleaner deleted",
+        title: `${deleteTarget.role} removed`,
         message: `${deleteTarget.name} was removed from the company.`,
       });
       await queryClient.invalidateQueries({ queryKey: ["company-users", companyId] });
@@ -196,7 +202,7 @@ export function UsersPage() {
       notify({
         tone: "error",
         title: "Delete failed",
-        message: error instanceof Error ? error.message : "The cleaner account could not be deleted.",
+        message: error instanceof Error ? error.message : "The team member account could not be removed.",
       });
     } finally {
       setIsDeletingCleaner(false);
@@ -208,8 +214,8 @@ export function UsersPage() {
       <PageHeader
         eyebrow="Users"
         title="People and access"
-        description={isCleaner ? "Review active cleaners and site access for your company." : "Invite managers and cleaners, review invitation status, and keep every person scoped to the sites they belong to."}
-        actions={isCleaner ? null : (
+        description={isCleaner ? "Review active cleaners and site access for your company." : "Manage supervisors and cleaners while keeping every person scoped to the sites they belong to."}
+        actions={!canManageCleaners ? null : (
           <>
             <Button
               variant="secondary"
@@ -219,25 +225,27 @@ export function UsersPage() {
               <MailPlus className="h-4 w-4" />
               Add Cleaner
             </Button>
-            <Button
-              onClick={openCreateManagerForm}
-              disabled={!companyId}
-            >
-              <UserRoundPlus className="h-4 w-4" />
-              Invite Manager
-            </Button>
+            {canManageSupervisors ? (
+              <Button
+                onClick={openCreateSupervisorForm}
+                disabled={!companyId}
+              >
+                <UserRoundPlus className="h-4 w-4" />
+                Invite Supervisor
+              </Button>
+            ) : null}
           </>
         )}
       />
 
-      {!isCleaner && isInviteOpen ? (
+      {canManageCleaners && isInviteOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
           <Card className="w-full max-w-2xl space-y-6 p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-lg font-semibold text-slate-950">{editingCleaner ? "Edit cleaner" : inviteMode === "Manager" ? "Invite manager" : "Add cleaner"}</p>
+                <p className="text-lg font-semibold text-slate-950">{editingMember ? `Edit ${editingMember.role.toLowerCase()}` : inviteMode === "Supervisor" ? "Invite supervisor" : "Add cleaner"}</p>
                 <p className="mt-1 text-sm text-slate-500">
-                  {editingCleaner ? "Update the cleaner details, login email, password, and assigned sites." : `Create the account, set a password, and assign the ${inviteMode.toLowerCase()} to one or more sites.`}
+                  {editingMember ? "Update the team member details, login email, password, and assigned sites." : `Create the account, set a password, and assign the ${inviteMode.toLowerCase()} to one or more sites.`}
                 </p>
               </div>
               <button
@@ -253,7 +261,7 @@ export function UsersPage() {
             <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)}>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium text-slate-700">{editingCleaner ? "Cleaner name" : `${inviteMode} name`}</label>
+                  <label className="text-sm font-medium text-slate-700">{editingMember ? `${editingMember.role} name` : `${inviteMode} name`}</label>
                   <input
                     type="text"
                     {...form.register("fullName")}
@@ -269,7 +277,7 @@ export function UsersPage() {
                     type="email"
                     {...form.register("email")}
                     className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400"
-                    placeholder={inviteMode === "Manager" ? "manager@company.com" : "cleaner@company.com"}
+                    placeholder={inviteMode === "Supervisor" ? "supervisor@company.com" : "cleaner@company.com"}
                   />
                   {form.formState.errors.email ? <p className="text-sm text-rose-600">{form.formState.errors.email.message}</p> : null}
                 </div>
@@ -280,7 +288,7 @@ export function UsersPage() {
                     type="password"
                     {...form.register("password")}
                     className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400"
-                    placeholder={editingCleaner ? "Leave blank to keep current password" : "Create a secure password"}
+                    placeholder={editingMember ? "Leave blank to keep current password" : "Create a secure password"}
                   />
                   {form.formState.errors.password ? <p className="text-sm text-rose-600">{form.formState.errors.password.message}</p> : null}
                 </div>
@@ -328,7 +336,7 @@ export function UsersPage() {
                       Saving...
                     </>
                   ) : (
-                    editingCleaner ? "Save changes" : "Save"
+                    editingMember ? "Save changes" : "Save"
                   )}
                 </Button>
               </div>
@@ -338,7 +346,7 @@ export function UsersPage() {
       ) : null}
 
       <Card className="space-y-4 p-5">
-        <SectionTitle title="Team members" description="Active managers, cleaners, and the sites they can access." />
+        <SectionTitle title="Team members" description="Active supervisors, cleaners, and the sites they can access." />
         <div className="grid gap-4 md:grid-cols-2">
           {isLoadingUsers ? (
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 md:col-span-2">
@@ -356,16 +364,16 @@ export function UsersPage() {
             users.map((user) => (
               <div
                 key={user.id}
-                role={!isCleaner && user.role === "Cleaner" ? "button" : undefined}
-                tabIndex={!isCleaner && user.role === "Cleaner" ? 0 : undefined}
-                onClick={!isCleaner && user.role === "Cleaner" ? () => openEditCleanerForm(user) : undefined}
-                onKeyDown={!isCleaner && user.role === "Cleaner" ? (event) => {
+                role={canManageMember(user) ? "button" : undefined}
+                tabIndex={canManageMember(user) ? 0 : undefined}
+                onClick={canManageMember(user) ? () => openEditMemberForm(user) : undefined}
+                onKeyDown={canManageMember(user) ? (event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
-                    openEditCleanerForm(user);
+                    openEditMemberForm(user);
                   }
                 } : undefined}
-                className={`rounded-lg border border-slate-200 bg-slate-50 p-5 ${!isCleaner && user.role === "Cleaner" ? "cursor-pointer transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300" : ""}`}
+                className={`rounded-lg border border-slate-200 bg-slate-50 p-5 ${canManageMember(user) ? "cursor-pointer transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300" : ""}`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -379,7 +387,7 @@ export function UsersPage() {
                     <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
                       {user.status}
                     </div>
-                    {!isCleaner && user.role === "Cleaner" ? (
+                    {canManageMember(user) ? (
                       <button
                         type="button"
                         onClick={(event) => {
@@ -413,8 +421,8 @@ export function UsersPage() {
 
       {deleteTarget ? (
         <ConfirmationDialog
-          title="Delete cleaner"
-          description={`Remove ${deleteTarget.name} from the company and delete their login account.`}
+          title={`Remove ${deleteTarget.role.toLowerCase()}`}
+          description={role === "Supervisor" ? `Remove ${deleteTarget.name} from the sites you supervise. Their account remains active if they belong to another site.` : `Remove ${deleteTarget.name} from the company and delete their login account.`}
           confirmLabel={isDeletingCleaner ? "Deleting..." : "Delete"}
           cancelLabel="Cancel"
           destructive

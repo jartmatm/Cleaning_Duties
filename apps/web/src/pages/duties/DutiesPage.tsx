@@ -299,11 +299,13 @@ export function DutiesPage() {
   const [managerStatusFilter, setManagerStatusFilter] = useState<ManagerStatusFilter>("All");
   const [saveAsPreloadedDuty, setSaveAsPreloadedDuty] = useState(false);
   const [linkedPreloadedDutyId, setLinkedPreloadedDutyId] = useState<string | null>(null);
+  const usesAssignedSites = role !== "Manager";
+  const canManagePreloadedDuties = role === "Manager";
 
   const { data: sites = [] } = useQuery({
-    queryKey: role === "Cleaner" ? ["sites", "cleaner", userId] : ["sites", companyId],
-    queryFn: () => role === "Cleaner" ? listMySites(userId ?? "") : listSites(companyId ?? ""),
-    enabled: role === "Cleaner" ? Boolean(userId) : Boolean(companyId),
+    queryKey: usesAssignedSites ? ["sites", role, userId] : ["sites", companyId],
+    queryFn: () => usesAssignedSites ? listMySites(userId ?? "") : listSites(companyId ?? ""),
+    enabled: usesAssignedSites ? Boolean(userId) : Boolean(companyId),
   });
 
   const activeSiteId = selectedSiteId ?? sessionActiveSiteId ?? sites[0]?.id ?? null;
@@ -398,7 +400,7 @@ export function DutiesPage() {
     onSuccess: async (_createdDuty, { values, draft }) => {
       let preloadedDutyCreated = false;
 
-      if (!draft && saveAsPreloadedDuty && companyId && userId) {
+      if (!draft && canManagePreloadedDuties && saveAsPreloadedDuty && companyId && userId) {
         try {
           await createPreloadedDuty(companyId, userId, values);
           preloadedDutyCreated = true;
@@ -432,14 +434,19 @@ export function DutiesPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ dutyId, values, draft }: { dutyId: string; values: DutyFormInput; draft?: boolean }) => draft ? updateDraftDuty(dutyId, values) : updateDuty(dutyId, values),
+    mutationFn: ({ dutyId, values, draft }: { dutyId: string; values: DutyFormInput; draft?: boolean }) => {
+      if (!userId) {
+        throw new Error("Missing duty editor context");
+      }
+      return draft ? updateDraftDuty(dutyId, userId, values) : updateDuty(dutyId, userId, values);
+    },
     onSuccess: async (_updatedDuty, { values, draft }) => {
       let preloadedDutyAction: "created" | "updated" | "removed" | null = null;
       const matchingTemplate = linkedPreloadedDutyId
         ? preloadedDuties.find((template) => template.id === linkedPreloadedDutyId) ?? null
         : findMatchingPreloadedDuty(preloadedDuties, editingDuty?.title ?? values.title);
 
-      if (!draft && companyId && userId) {
+      if (!draft && canManagePreloadedDuties && companyId && userId) {
         try {
           if (saveAsPreloadedDuty && matchingTemplate) {
             await updatePreloadedDuty(matchingTemplate.id, values);
@@ -622,7 +629,7 @@ export function DutiesPage() {
     setShowPhotoModal(false);
     setHasSelectedPreloadedDuty(false);
     setPreloadedSuggestionsDismissed(true);
-    setSaveAsPreloadedDuty(Boolean(matchingTemplate));
+    setSaveAsPreloadedDuty(canManagePreloadedDuties && Boolean(matchingTemplate));
     setLinkedPreloadedDutyId(matchingTemplate?.id ?? null);
     setEditingDuty(duty);
     setReferencePhotoItems(
@@ -980,7 +987,7 @@ export function DutiesPage() {
               description="Capture the work details, deadline, and equipment required."
             />
             <div className="flex flex-wrap items-center justify-end gap-3">
-              <label className="flex cursor-pointer items-center gap-2 rounded-md border border-[var(--company-border)] bg-white px-3 py-2 text-sm font-medium text-[var(--company-text)]">
+              {canManagePreloadedDuties ? <label className="flex cursor-pointer items-center gap-2 rounded-md border border-[var(--company-border)] bg-white px-3 py-2 text-sm font-medium text-[var(--company-text)]">
                 <input
                   type="checkbox"
                   role="switch"
@@ -1001,7 +1008,7 @@ export function DutiesPage() {
                   />
                 </span>
                 <span>{editingDuty ? "Preloaded duty" : "Save as preloaded"}</span>
-              </label>
+              </label> : null}
               <Button
                 variant="secondary"
                 disabled={createMutation.isPending || updateMutation.isPending}

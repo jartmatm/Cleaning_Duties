@@ -20,7 +20,7 @@ type ProfileRow = {
   id: string;
   company_id: string;
   full_name: string;
-  role: "Owner" | "Manager" | "Cleaner";
+  role: "Manager" | "Supervisor" | "Cleaner";
 };
 
 type BillingBody = {
@@ -64,7 +64,7 @@ async function getAuthorizedBillingContext(request: Request, companyId: string |
   if (profileError) {
     throw Object.assign(new Error(profileError.message), { statusCode: 500 });
   }
-  if (!profile || profile.company_id !== companyId || !["Owner", "Manager"].includes(profile.role)) {
+  if (!profile || profile.company_id !== companyId || profile.role !== "Manager") {
     throw Object.assign(new Error("You are not allowed to manage billing for this company"), { statusCode: 403 });
   }
 
@@ -96,7 +96,7 @@ async function getOrCreateStripeCustomer(context: Awaited<ReturnType<typeof getA
     name: context.company.name,
     metadata: {
       company_id: context.company.id,
-      owner_profile_id: context.profile.id,
+      manager_profile_id: context.profile.id,
     },
   });
 

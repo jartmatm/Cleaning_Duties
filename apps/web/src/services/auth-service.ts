@@ -1,4 +1,4 @@
-import { authLoginSchema, ownerSignupSchema, type AuthLoginInput, type OwnerSignupInput } from "@cleaning-duties/shared";
+import { authLoginSchema, managerSignupSchema, type AuthLoginInput, type ManagerSignupInput } from "@cleaning-duties/shared";
 import { setRememberMe, supabase } from "./supabase-client";
 
 type LoginResult =
@@ -17,8 +17,8 @@ export function validateLogin(input: unknown): AuthLoginInput {
   return authLoginSchema.parse(input);
 }
 
-export function validateOwnerSignup(input: unknown): OwnerSignupInput {
-  return ownerSignupSchema.parse(input);
+export function validateManagerSignup(input: unknown): ManagerSignupInput {
+  return managerSignupSchema.parse(input);
 }
 
 export async function signInWithCredentials(input: unknown): Promise<LoginResult> {
@@ -36,8 +36,8 @@ export async function signInWithCredentials(input: unknown): Promise<LoginResult
   return { ok: true };
 }
 
-export async function signUpOwner(input: unknown): Promise<SignupResult> {
-  const values = validateOwnerSignup(input);
+export async function signUpManager(input: unknown): Promise<SignupResult> {
+  const values = validateManagerSignup(input);
   setRememberMe(true);
 
   const { data, error } = await supabase.auth.signUp({
@@ -47,8 +47,8 @@ export async function signUpOwner(input: unknown): Promise<SignupResult> {
       emailRedirectTo: "https://cleaning-duties-web.vercel.app/",
       data: {
         company_name: values.companyName,
-        full_name: values.ownerName,
-        role: "Owner",
+        full_name: values.managerName,
+        role: "Manager",
       },
     },
   });

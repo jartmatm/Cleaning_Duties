@@ -4,7 +4,7 @@ type InviteUserInput = {
   fullName: string;
   email: string;
   password: string;
-  role: "Manager" | "Cleaner";
+  role: "Supervisor" | "Cleaner";
   companyId: string;
   siteIds: string[];
 };
@@ -56,6 +56,6 @@ export function inviteCleaner(input: Omit<InviteUserInput, "role">) {
   return inviteUser({ ...input, role: "Cleaner" });
 }
 
-export function inviteManager(input: Omit<InviteUserInput, "role">) {
-  return inviteUser({ ...input, role: "Manager" });
+export function inviteSupervisor(input: Omit<InviteUserInput, "role">) {
+  return inviteUser({ ...input, role: "Supervisor" });
 }

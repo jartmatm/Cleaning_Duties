@@ -211,7 +211,8 @@ function percent(value: number, total: number) {
 
 function ManagerDashboard() {
   const navigate = useNavigate();
-  const { userId, companyId, activeSiteId } = useSession();
+  const { userId, companyId, role, activeSiteId } = useSession();
+  const usesAssignedSites = role === "Supervisor";
   const [activeFilter, setActiveFilter] = useState<ManagerDashboardFilter | null>(null);
   const { data: profile } = useQuery({
     queryKey: ["dashboard-profile", userId],
@@ -219,9 +220,9 @@ function ManagerDashboard() {
     enabled: Boolean(userId),
   });
   const { data: sites = [] } = useQuery({
-    queryKey: ["dashboard-sites", companyId],
-    queryFn: () => listSites(companyId ?? ""),
-    enabled: Boolean(companyId),
+    queryKey: usesAssignedSites ? ["dashboard-sites", companyId, userId] : ["dashboard-sites", companyId],
+    queryFn: () => usesAssignedSites ? listMySites(userId ?? "") : listSites(companyId ?? ""),
+    enabled: usesAssignedSites ? Boolean(userId) : Boolean(companyId),
   });
   const activeSite = sites.find((site) => site.id === activeSiteId) ?? sites[0] ?? null;
   const { data: notifications = [] } = useQuery({
@@ -370,7 +371,7 @@ function ManagerDashboard() {
       </div>
 
       <Card className="space-y-4 p-5">
-        <SectionTitle title="Weekly reports" description="A quick operating view for managers and owners." />
+        <SectionTitle title="Weekly reports" description="A quick operating view for managers and supervisors." />
         <BarChartBenchmark data={weeklyReportData} />
       </Card>
     </div>

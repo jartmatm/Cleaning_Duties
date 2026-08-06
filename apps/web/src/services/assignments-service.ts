@@ -3,19 +3,19 @@ import { apiUrl } from "./api-client";
 
 export type SiteMemberRow = {
   profile_id: string;
-  role: "Owner" | "Manager" | "Cleaner";
+  role: "Manager" | "Supervisor" | "Cleaner";
   profiles: {
     id: string;
     full_name: string;
     phone: string | null;
-    role: "Owner" | "Manager" | "Cleaner";
+    role: "Manager" | "Supervisor" | "Cleaner";
   } | null;
 };
 
 export type AssigneeOption = {
   id: string;
   name: string;
-  role: "Owner" | "Manager" | "Cleaner";
+  role: "Cleaner";
 };
 
 export async function listAssignableMembers(siteId: string) {
@@ -23,7 +23,7 @@ export async function listAssignableMembers(siteId: string) {
     .from("site_members")
     .select("profile_id, role, profiles(id, full_name, phone, role)")
     .eq("site_id", siteId)
-    .in("role", ["Owner", "Manager", "Cleaner"]);
+    .eq("role", "Cleaner");
 
   if (error) {
     throw new Error(error.message);
@@ -35,7 +35,7 @@ export async function listAssignableMembers(siteId: string) {
     .map((row) => ({
       id: row.profile_id,
       name: row.profiles?.full_name ?? "Unknown",
-      role: row.role,
+      role: "Cleaner" as const,
     }));
 }
 

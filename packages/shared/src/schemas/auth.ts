@@ -8,9 +8,9 @@ export const authLoginSchema = z.object({
 
 export type AuthLoginInput = z.infer<typeof authLoginSchema>;
 
-export const ownerSignupSchema = z.object({
+export const managerSignupSchema = z.object({
   companyName: z.string().trim().min(2, "Enter the company name."),
-  ownerName: z.string().trim().min(2, "Enter the owner name."),
+  managerName: z.string().trim().min(2, "Enter the manager name."),
   email: z.string().trim().email("Enter a valid email."),
   password: z.string().min(8, "Password must be at least 8 characters."),
   confirmPassword: z.string().min(8, "Confirm your password."),
@@ -19,4 +19,4 @@ export const ownerSignupSchema = z.object({
   path: ["confirmPassword"],
 });
 
-export type OwnerSignupInput = z.infer<typeof ownerSignupSchema>;
+export type ManagerSignupInput = z.infer<typeof managerSignupSchema>;

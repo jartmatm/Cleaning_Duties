@@ -7,7 +7,7 @@ type SessionState = {
   companyLogoUrl: string | null;
   companyPalette: string | null;
   activeSiteId: string | null;
-  role: "Owner" | "Manager" | "Cleaner" | null;
+  role: "Manager" | "Supervisor" | "Cleaner" | null;
   email: string | null;
   isSessionLoading: boolean;
   setSession: (session: {
@@ -16,7 +16,7 @@ type SessionState = {
     companyName: string | null;
     companyLogoUrl?: string | null;
     companyPalette?: string | null;
-    role: "Owner" | "Manager" | "Cleaner";
+    role: "Manager" | "Supervisor" | "Cleaner";
   }) => void;
   setCompanyBranding: (branding: { companyName: string | null; companyLogoUrl: string | null; companyPalette: string | null }) => void;
   setActiveSiteId: (siteId: string | null) => void;
