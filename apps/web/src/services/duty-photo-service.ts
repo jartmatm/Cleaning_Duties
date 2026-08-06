@@ -81,6 +81,46 @@ export async function uploadDutyEvidencePhotos(params: {
   });
 }
 
+export async function uploadUnplannedDutyPhotos(params: {
+  bucketName: string;
+  siteId: string;
+  cleanerId: string;
+  requestId: string;
+  dutyTitle: string;
+  files: File[];
+  type: "before" | "after";
+}) {
+  const uploadedUrls: string[] = [];
+
+  for (const file of params.files) {
+    const optimizedImage = await optimizeImageForUpload(file);
+    const uploadFile = optimizedImage.file;
+    const fileName = `${safeSegment(params.dutyTitle || "unplanned-duty")}-${crypto.randomUUID()}.${fileExtension(uploadFile.name)}`;
+    const storagePath = [
+      safeSegment(params.siteId),
+      "unplanned",
+      safeSegment(params.cleanerId),
+      safeSegment(params.requestId),
+      params.type,
+      `${Date.now()}-${fileName}`,
+    ].join("/");
+    const { error } = await supabase.storage.from(params.bucketName).upload(storagePath, uploadFile, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: uploadFile.type || "image/jpeg",
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const { data } = supabase.storage.from(params.bucketName).getPublicUrl(storagePath);
+    uploadedUrls.push(data.publicUrl);
+  }
+
+  return uploadedUrls;
+}
+
 export async function deleteDutyEvidencePhotos(params: { bucketName: string; photoUrls: string[] }) {
   const storagePaths = params.photoUrls
     .map((photoUrl) => storagePathFromUrl(params.bucketName, photoUrl))

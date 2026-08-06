@@ -1,7 +1,7 @@
 import { INCIDENT_TYPES, type IncidentType } from "@cleaning-duties/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { arc, pie, type PieArcDatum } from "d3";
-import { Bell, CheckCircle2, CircleAlert, ClipboardList, ListTodo, Loader2, Send, Sparkles, X } from "lucide-react";
+import { Bell, CheckCircle2, CircleAlert, ClipboardList, ClipboardPlus, ListTodo, Loader2, Send, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
@@ -13,12 +13,14 @@ import { QuickActions } from "../../components/common/quick-actions";
 import { SectionTitle } from "../../components/common/section-title";
 import { StatCard } from "../../components/common/stat-card";
 import { notify } from "../../components/common/toast";
+import { UnplannedDutyFlow } from "../../components/unplanned-duty/UnplannedDutyFlow";
+import { UnplannedDutyReviewModal } from "../../components/unplanned-duty/UnplannedDutyReviewModal";
 import { useSession } from "../../hooks/use-session";
 import { listAssignedDuties, listDuties, updateDutyStatus, type DutyItem } from "../../services/duties-service";
 import { createIncident, listIncidentsForReporter, listIncidentsForSite } from "../../services/incidents-service";
-import { listNotifications } from "../../services/notifications-service";
 import { getCurrentProfile } from "../../services/profile-service";
 import { listMySites, listSites, type SiteItem } from "../../services/sites-service";
+import { getActiveDutyShift, listUnplannedDutyRequests, reviewUnplannedDutyRequest, type UnplannedDutyRequest } from "../../services/unplanned-duty-service";
 import { formatDate, formatDateTime } from "../../utils/date-format";
 
 type CleanerFilter = "scheduled" | "pending" | "in-progress" | "completed";
@@ -211,9 +213,11 @@ function percent(value: number, total: number) {
 
 function ManagerDashboard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { userId, companyId, role, activeSiteId } = useSession();
   const usesAssignedSites = role === "Supervisor";
   const [activeFilter, setActiveFilter] = useState<ManagerDashboardFilter | null>(null);
+  const [selectedUnplannedRequest, setSelectedUnplannedRequest] = useState<UnplannedDutyRequest | null>(null);
   const { data: profile } = useQuery({
     queryKey: ["dashboard-profile", userId],
     queryFn: () => getCurrentProfile(userId ?? ""),
@@ -225,11 +229,6 @@ function ManagerDashboard() {
     enabled: usesAssignedSites ? Boolean(userId) : Boolean(companyId),
   });
   const activeSite = sites.find((site) => site.id === activeSiteId) ?? sites[0] ?? null;
-  const { data: notifications = [] } = useQuery({
-    queryKey: ["notifications", userId],
-    queryFn: () => listNotifications(userId ?? ""),
-    enabled: Boolean(userId),
-  });
   const { data: duties = [] } = useQuery({
     queryKey: ["dashboard-duties", activeSite?.id],
     queryFn: () => listDuties(activeSite?.id ?? ""),
@@ -239,6 +238,37 @@ function ManagerDashboard() {
     queryKey: ["dashboard-incidents", activeSite?.id],
     queryFn: () => listIncidentsForSite(activeSite?.id ?? ""),
     enabled: Boolean(activeSite?.id),
+  });
+  const { data: unplannedRequests = [], isLoading: isLoadingUnplannedRequests } = useQuery({
+    queryKey: ["unplanned-duty-requests", activeSite?.id],
+    queryFn: () => listUnplannedDutyRequests(activeSite?.id ?? ""),
+    enabled: Boolean(activeSite?.id),
+    refetchInterval: 15_000,
+  });
+
+  const reviewUnplannedMutation = useMutation({
+    mutationFn: ({ requestId, approve }: { requestId: string; approve: boolean }) => reviewUnplannedDutyRequest(requestId, approve),
+    onSuccess: async (_result, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["unplanned-duty-requests", activeSite?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard-duties", activeSite?.id] }),
+      ]);
+      setSelectedUnplannedRequest(null);
+      notify({
+        tone: "success",
+        title: variables.approve ? "Duty approved" : "Request rejected",
+        message: variables.approve ? "The completed duty is now part of the cleaner's shift history." : "The request and its evidence were removed.",
+      });
+    },
+    onError: async (error) => {
+      await queryClient.invalidateQueries({ queryKey: ["unplanned-duty-requests", activeSite?.id] });
+      setSelectedUnplannedRequest(null);
+      notify({
+        tone: "error",
+        title: "Request already closed",
+        message: error instanceof Error ? error.message : "Another reviewer may have handled this request.",
+      });
+    },
   });
 
   const weeklyReportData = useMemo(() => {
@@ -353,16 +383,31 @@ function ManagerDashboard() {
         <div className="space-y-6">
           <QuickActions />
           <Card className="space-y-4 p-5">
-            <SectionTitle title="Notifications" description="Unread alerts and duty updates." />
+            <SectionTitle title="Unplanned duty requests" description="Extra work waiting for review at the active site." />
             <div className="space-y-3">
-              {notifications.length === 0 ? (
-                <p className="text-sm text-slate-500">No notifications yet.</p>
+              {isLoadingUnplannedRequests ? (
+                <p className="text-sm text-slate-500">Loading requests...</p>
+              ) : unplannedRequests.length === 0 ? (
+                <p className="text-sm text-slate-500">No unplanned duties waiting for review.</p>
               ) : (
-                notifications.map((notification) => (
-                  <div key={notification.id} className="rounded-md bg-slate-50 p-4">
-                    <p className="text-sm font-medium text-slate-950">{notification.type}</p>
-                    <p className="mt-1 text-sm text-slate-500">{formatDateTime(notification.createdAt)}</p>
-                  </div>
+                unplannedRequests.map((request) => (
+                  <button
+                    key={request.id}
+                    type="button"
+                    onClick={() => setSelectedUnplannedRequest(request)}
+                    className="w-full rounded-lg bg-slate-950 p-4 text-left text-white transition hover:-translate-y-0.5 hover:bg-slate-900 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="break-words font-semibold">{request.title}</p>
+                        <p className="mt-1 text-sm text-slate-300">{request.cleanerName}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">Review</span>
+                    </div>
+                    <p className="mt-4 text-xs leading-5 text-slate-300">
+                      {formatDateTime(request.shiftStartedAt)} - {formatDateTime(request.shiftEndsAt)}
+                    </p>
+                  </button>
                 ))
               )}
             </div>
@@ -374,6 +419,16 @@ function ManagerDashboard() {
         <SectionTitle title="Weekly reports" description="A quick operating view for managers and supervisors." />
         <BarChartBenchmark data={weeklyReportData} />
       </Card>
+
+      {selectedUnplannedRequest ? (
+        <UnplannedDutyReviewModal
+          request={selectedUnplannedRequest}
+          isReviewing={reviewUnplannedMutation.isPending}
+          onClose={() => setSelectedUnplannedRequest(null)}
+          onApprove={() => reviewUnplannedMutation.mutate({ requestId: selectedUnplannedRequest.id, approve: true })}
+          onReject={() => reviewUnplannedMutation.mutate({ requestId: selectedUnplannedRequest.id, approve: false })}
+        />
+      ) : null}
     </div>
   );
 }
@@ -414,6 +469,8 @@ function CleanerDashboard() {
   const [activeFilter, setActiveFilter] = useState<CleanerFilter>("in-progress");
   const [selectedDuty, setSelectedDuty] = useState<DutyItem | null>(null);
   const [isIncidentOpen, setIsIncidentOpen] = useState(false);
+  const [isUnplannedDutyOpen, setIsUnplannedDutyOpen] = useState(false);
+  const [shiftClock, setShiftClock] = useState(() => Date.now());
 
   const { data: sites = [] } = useQuery({
     queryKey: ["cleaner-sites", userId],
@@ -427,7 +484,13 @@ function CleanerDashboard() {
     queryKey: ["cleaner-assigned-duties", userId],
     queryFn: () => listAssignedDuties(userId ?? ""),
     enabled: Boolean(userId),
+    refetchInterval: 60_000,
   });
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setShiftClock(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const openDutyMutation = useMutation({
     mutationFn: async (duty: DutyItem) => {
@@ -449,6 +512,10 @@ function CleanerDashboard() {
   const siteDuties = useMemo(
     () => (activeSite ? duties.filter((duty) => duty.siteId === activeSite.id) : duties),
     [activeSite, duties],
+  );
+  const activeShift = useMemo(
+    () => getActiveDutyShift(siteDuties, activeSite?.id, shiftClock),
+    [activeSite?.id, shiftClock, siteDuties],
   );
   const progressDuties = useMemo(() => getCleanerProgressDuties(siteDuties), [siteDuties]);
   const cleanerKpiCounts = useMemo<Record<CleanerFilter, number>>(() => ({
@@ -534,12 +601,18 @@ function CleanerDashboard() {
           <Card className="space-y-4 p-5">
             <div>
               <p className="text-sm font-medium text-slate-950">Quick actions</p>
-              <p className="mt-1 text-sm text-slate-500">Submit a workplace incident report.</p>
+              <p className="mt-1 text-sm text-slate-500">Report an issue or submit extra work from this shift.</p>
             </div>
-            <Button onClick={() => setIsIncidentOpen(true)}>
-              <CircleAlert className="h-4 w-4" />
-              Report incident
-            </Button>
+            <div className="grid gap-3">
+              <Button onClick={() => setIsUnplannedDutyOpen(true)} disabled={!activeShift || !activeSite || !userId} title={activeShift ? "Submit unplanned duty" : "Available during an active assigned shift"}>
+                <ClipboardPlus className="mr-2 h-4 w-4" />
+                Submit unplanned duty
+              </Button>
+              <Button variant="secondary" onClick={() => setIsIncidentOpen(true)}>
+                <CircleAlert className="mr-2 h-4 w-4" />
+                Report incident
+              </Button>
+            </div>
           </Card>
         </div>
       </div>
@@ -560,6 +633,21 @@ function CleanerDashboard() {
           duties={siteDuties}
           activeSiteId={activeSite?.id ?? ""}
           onClose={() => setIsIncidentOpen(false)}
+        />
+      ) : null}
+
+      {isUnplannedDutyOpen && activeShift && activeSite && userId ? (
+        <UnplannedDutyFlow
+          cleanerId={userId}
+          site={activeSite}
+          shift={activeShift}
+          onClose={() => {
+            setIsUnplannedDutyOpen(false);
+            navigate("/dashboard", { replace: true });
+          }}
+          onSubmitted={async () => {
+            await queryClient.invalidateQueries({ queryKey: ["cleaner-assigned-duties", userId] });
+          }}
         />
       ) : null}
     </div>
