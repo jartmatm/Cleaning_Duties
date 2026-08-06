@@ -1,7 +1,8 @@
-import { ArrowLeft, Check, Loader2, MapPin, Plus, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Check, Loader2, MapPin, Plus, X } from "lucide-react";
 import { useEffect, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useMutation } from "@tanstack/react-query";
+import Lottie from "lottie-react";
 import { AppLoader } from "../common/app-loader";
 import { CompletionCelebration } from "../common/completion-celebration";
 import { notify } from "../common/toast";
@@ -12,6 +13,10 @@ import { submitUnplannedDutyRequest, type ActiveDutyShift } from "../../services
 import { formatDateTime } from "../../utils/date-format";
 import { getCompanyPalette } from "../../constants/company-palettes";
 import { useSession } from "../../hooks/use-session";
+import cleaningBasketLottie from "../../assets/unplanned-cleaning-basket.json";
+import locationLottie from "../../assets/unplanned-location.json";
+import choosePhotoLottie from "../../assets/unplanned-choose-photo.json";
+import previewLottie from "../../assets/unplanned-preview.json";
 
 type UnplannedDutyFlowProps = {
   cleanerId: string;
@@ -50,13 +55,14 @@ function useFilePreviews(files: File[]) {
   return previews;
 }
 
-function StepArtwork() {
+function StepArtwork({ animationData, label }: { animationData: object; label: string }) {
   return (
     <div
-      className="mx-auto flex h-52 w-full max-w-md items-center justify-center rounded-md border border-dashed border-slate-200 bg-slate-50 sm:h-60"
-      aria-label="Step illustration placeholder"
+      className="mx-auto h-52 w-full max-w-md sm:h-60"
+      role="img"
+      aria-label={label}
     >
-      <Sparkles className="h-10 w-10 text-slate-300" aria-hidden="true" />
+      <Lottie animationData={animationData} loop autoplay className="h-full w-full" aria-hidden="true" />
     </div>
   );
 }
@@ -109,7 +115,7 @@ function PhotoStep(props: {
 
   return (
     <>
-      <StepArtwork />
+      <StepArtwork animationData={choosePhotoLottie} label="Choose photo animation" />
       <div className="mx-auto mt-8 max-w-xl text-center">
         <p className="text-sm font-semibold text-slate-500">Optional evidence</p>
         <h1 className="mt-2 text-3xl font-semibold text-slate-950">{props.title}</h1>
@@ -277,7 +283,7 @@ export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted
         <main className="flex-1 px-5 pb-10 pt-4 sm:px-8 sm:pt-8">
           {step === 0 ? (
             <>
-              <StepArtwork />
+              <StepArtwork animationData={cleaningBasketLottie} label="Cleaning basket animation" />
               <div className="mx-auto mt-8 max-w-xl">
                 <p className="text-sm font-semibold text-slate-500">Unplanned duty</p>
                 <h1 className="mt-2 text-3xl font-semibold text-slate-950">What did you take care of?</h1>
@@ -296,7 +302,7 @@ export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted
 
           {step === 1 ? (
             <>
-              <StepArtwork />
+              <StepArtwork animationData={locationLottie} label="Location animation" />
               <div className="mx-auto mt-8 max-w-xl">
                 <p className="text-sm font-semibold text-slate-500">Work details</p>
                 <h1 className="mt-2 text-3xl font-semibold text-slate-950">Where did it happen?</h1>
@@ -356,7 +362,7 @@ export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted
 
           {step === 4 ? (
             <>
-              <StepArtwork />
+              <StepArtwork animationData={previewLottie} label="Preview animation" />
               <div className="mx-auto mt-8 max-w-2xl">
                 <p className="text-sm font-semibold text-slate-500">Final review</p>
                 <h1 className="mt-2 text-3xl font-semibold text-slate-950">Review your extra work</h1>
