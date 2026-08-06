@@ -373,14 +373,25 @@ export function UsersPage() {
                     openEditMemberForm(user);
                   }
                 } : undefined}
-                className={`rounded-lg border border-slate-200 bg-slate-50 p-5 ${canManageMember(user) ? "cursor-pointer transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300" : ""}`}
+                className={`flex h-full min-w-0 flex-col rounded-lg border border-slate-200 bg-slate-50 p-5 ${canManageMember(user) ? "cursor-pointer transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300" : ""}`}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-semibold text-slate-950">{user.name}</p>
-                    <p className="mt-1 text-sm text-slate-500">{user.email ?? user.role}</p>
+                <div className="min-w-0">
+                  <p className="break-words font-semibold text-slate-950">{user.name}</p>
+                  <p className="mt-1 break-words text-sm text-slate-500">{user.email ?? user.role}</p>
+                </div>
+                <div className="mt-auto flex flex-wrap items-end justify-between gap-3 pt-4">
+                  <div className="flex min-w-0 flex-wrap gap-2">
+                    {user.siteNames.length > 0 ? (
+                      user.siteNames.map((siteName) => (
+                        <span key={siteName} className="max-w-full break-words rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+                          {siteName}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-slate-500">No sites assigned</span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="ml-auto flex shrink-0 items-center gap-2">
                     <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
                       {user.role}
                     </div>
@@ -401,17 +412,6 @@ export function UsersPage() {
                       </button>
                     ) : null}
                   </div>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {user.siteNames.length > 0 ? (
-                    user.siteNames.map((siteName) => (
-                      <span key={siteName} className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
-                        {siteName}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-slate-500">No sites assigned</span>
-                  )}
                 </div>
               </div>
             ))
