@@ -4,5 +4,5 @@ import { CompletionCelebration } from "../../components/common/completion-celebr
 export function CompletionCelebrationPage() {
   const navigate = useNavigate();
 
-  return <CompletionCelebration onComplete={() => navigate("/", { replace: true })} />;
+  return <CompletionCelebration onComplete={() => navigate("/dashboard", { replace: true })} />;
 }

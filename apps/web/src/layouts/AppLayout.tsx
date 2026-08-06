@@ -71,7 +71,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   <NavLink
                     key={item.to}
                     to={item.to}
-                    end={item.to === "/"}
+                    end={item.to === "/dashboard"}
                     className={({ isActive }) =>
                       `flex items-center gap-3 rounded-md px-4 py-3 transition ${
                         isActive ? "bg-[var(--company-primary)] text-white" : "text-slate-600 hover:bg-[var(--company-surface)]"

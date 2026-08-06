@@ -68,7 +68,7 @@ export function SiteInfoPage() {
   });
 
   if (!siteId) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   async function handlePhotoSelection(event: ChangeEvent<HTMLInputElement>) {

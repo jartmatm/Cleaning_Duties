@@ -11,7 +11,7 @@ export function PublicRoute({ children }: { children: ReactNode }) {
   }
 
   if (userId) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;

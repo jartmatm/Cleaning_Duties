@@ -5,6 +5,7 @@ import { useSession } from "../hooks/use-session";
 import { AppLayout } from "../layouts/AppLayout";
 import { AuthLayout } from "../layouts/AuthLayout";
 import { DashboardPage } from "../pages/dashboard/DashboardPage";
+import { LandingPage } from "../pages/landing/LandingPage";
 import { LoginPage } from "../pages/auth/LoginPage";
 import { ResetPasswordPage } from "../pages/auth/ResetPasswordPage";
 import { DutiesPage } from "../pages/duties/DutiesPage";
@@ -203,6 +204,10 @@ function AppRoutes() {
           />
           <Route
             path="/"
+            element={<LandingPage />}
+          />
+          <Route
+            path="/dashboard"
             element={
               <ProtectedRoute>
                 <AppLayout>

@@ -8,7 +8,7 @@ export type NavigationItem = {
 };
 
 export const navigationItems: NavigationItem[] = [
-  { label: "Dashboard", to: "/", icon: LayoutDashboard },
+  { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
   { label: "Sites", to: "/sites", icon: MapPinned },
   { label: "Cleaning Duties", to: "/duties", icon: SquareCheckBig },
   { label: "Users", to: "/users", icon: Users },

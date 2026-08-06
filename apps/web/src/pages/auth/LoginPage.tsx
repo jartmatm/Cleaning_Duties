@@ -83,7 +83,7 @@ export function LoginPage() {
     }
 
     notify({ tone: "success", title: "Welcome back", message: "Login completed successfully." });
-    navigate("/");
+    navigate("/dashboard");
   }
 
   async function onSignupSubmit(values: OwnerSignupInput) {
@@ -103,7 +103,7 @@ export function LoginPage() {
     }
 
     notify({ tone: "success", title: "Company created", message: "Your owner account is ready." });
-    navigate("/");
+    navigate("/dashboard");
   }
 
   function switchMode(nextMode: "login" | "signup") {
