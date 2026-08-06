@@ -1,5 +1,5 @@
 import { ArrowLeft, Check, Loader2, MapPin, Plus, Sparkles, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useMutation } from "@tanstack/react-query";
 import { AppLoader } from "../common/app-loader";
@@ -10,6 +10,8 @@ import { Input } from "../ui/input";
 import type { SiteItem } from "../../services/sites-service";
 import { submitUnplannedDutyRequest, type ActiveDutyShift } from "../../services/unplanned-duty-service";
 import { formatDateTime } from "../../utils/date-format";
+import { getCompanyPalette } from "../../constants/company-palettes";
+import { useSession } from "../../hooks/use-session";
 
 type UnplannedDutyFlowProps = {
   cleanerId: string;
@@ -139,6 +141,15 @@ function PhotoStep(props: {
 }
 
 export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted }: UnplannedDutyFlowProps) {
+  const { companyPalette } = useSession();
+  const palette = getCompanyPalette(companyPalette);
+  const portalThemeStyle = {
+    "--company-primary": palette.primary,
+    "--company-accent": palette.accent,
+    "--company-surface": palette.surface,
+    "--company-text": palette.text,
+    "--company-border": `color-mix(in srgb, ${palette.accent} 28%, white)`,
+  } as CSSProperties;
   const [step, setStep] = useState(0);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -228,7 +239,7 @@ export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted
 
   if (showCelebration) {
     return createPortal(
-      <div className="fixed inset-0 z-[90] h-[100dvh] overflow-hidden bg-white">
+      <div className="fixed inset-0 z-[90] h-[100dvh] overflow-hidden bg-white" style={portalThemeStyle}>
         <CompletionCelebration onComplete={onClose} />
       </div>,
       document.body,
@@ -237,7 +248,7 @@ export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted
 
   if (isTransitioning) {
     return createPortal(
-      <div className="fixed inset-0 z-[90] h-[100dvh] overflow-hidden bg-white">
+      <div className="fixed inset-0 z-[90] h-[100dvh] overflow-hidden bg-white" style={portalThemeStyle}>
         <AppLoader fullScreen message="Loading next step..." />
       </div>,
       document.body,
@@ -245,7 +256,7 @@ export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[80] h-[100dvh] overflow-y-auto overscroll-contain bg-white">
+    <div className="fixed inset-0 z-[80] h-[100dvh] overflow-y-auto overscroll-contain bg-white" style={portalThemeStyle}>
       <div className="flex min-h-[100dvh] flex-col">
         <header className="sticky top-0 z-10 flex items-center justify-between bg-white px-5 py-5 sm:px-8">
           <button
@@ -402,18 +413,13 @@ export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted
               variant="ghost"
               onClick={goBack}
               disabled={step === 0 || submitMutation.isPending || isButtonBusy}
-              className={`${step === 0 ? "invisible" : ""} !text-slate-700 hover:!bg-slate-100`}
+              className={step === 0 ? "invisible" : ""}
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
             {step < TOTAL_STEPS - 1 ? (
-              <Button
-                type="button"
-                onClick={goNext}
-                disabled={isButtonBusy}
-                className="min-w-28 !bg-slate-950 !text-white hover:!bg-slate-800 disabled:opacity-50"
-              >
+              <Button type="button" onClick={goNext} disabled={isButtonBusy} className="min-w-28">
                 {isButtonBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Next"}
               </Button>
             ) : (
@@ -421,7 +427,7 @@ export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted
                 type="button"
                 onClick={() => submitMutation.mutate()}
                 disabled={submitMutation.isPending}
-                className="min-w-28 !bg-slate-950 !text-white hover:!bg-slate-800 disabled:opacity-50"
+                className="min-w-28"
               >
                 {submitMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
                 {submitMutation.isPending ? "Submitting..." : "Submit"}

@@ -1,8 +1,10 @@
 import { Clock3, Loader2, MapPin, UserRound, X } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import type { UnplannedDutyRequest } from "../../services/unplanned-duty-service";
 import { formatDateTime } from "../../utils/date-format";
+import { getCompanyPalette } from "../../constants/company-palettes";
+import { useSession } from "../../hooks/use-session";
 import { Button } from "../ui/button";
 
 type UnplannedDutyReviewModalProps = {
@@ -42,6 +44,15 @@ function EvidenceGroup({ title, photos }: { title: string; photos: string[] }) {
 }
 
 export function UnplannedDutyReviewModal({ request, isReviewing, onClose, onApprove, onReject }: UnplannedDutyReviewModalProps) {
+  const { companyPalette } = useSession();
+  const palette = getCompanyPalette(companyPalette);
+  const portalThemeStyle = {
+    "--company-primary": palette.primary,
+    "--company-accent": palette.accent,
+    "--company-surface": palette.surface,
+    "--company-text": palette.text,
+    "--company-border": `color-mix(in srgb, ${palette.accent} 28%, white)`,
+  } as CSSProperties;
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
@@ -67,7 +78,13 @@ export function UnplannedDutyReviewModal({ request, isReviewing, onClose, onAppr
   }, [isReviewing, onClose]);
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="unplanned-review-title">
+    <div
+      className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/45 p-4 backdrop-blur-sm"
+      style={portalThemeStyle}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="unplanned-review-title"
+    >
       <div className="flex min-h-full items-center justify-center">
         <section ref={scrollRef} className="max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto rounded-lg bg-white shadow-xl ring-1 ring-slate-200">
           <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
@@ -135,12 +152,7 @@ export function UnplannedDutyReviewModal({ request, isReviewing, onClose, onAppr
             >
               {isReviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Reject"}
             </button>
-            <Button
-              type="button"
-              onClick={onApprove}
-              disabled={isReviewing}
-              className="min-w-28 !bg-slate-950 !text-white hover:!bg-slate-800 disabled:opacity-50"
-            >
+            <Button type="button" onClick={onApprove} disabled={isReviewing} className="min-w-28">
               {isReviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Approve"}
             </Button>
           </footer>
