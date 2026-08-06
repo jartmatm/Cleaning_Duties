@@ -402,13 +402,18 @@ export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted
               variant="ghost"
               onClick={goBack}
               disabled={step === 0 || submitMutation.isPending || isButtonBusy}
-              className={step === 0 ? "invisible" : ""}
+              className={`${step === 0 ? "invisible" : ""} !text-slate-700 hover:!bg-slate-100`}
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
             {step < TOTAL_STEPS - 1 ? (
-              <Button type="button" onClick={goNext} disabled={isButtonBusy} className="min-w-28">
+              <Button
+                type="button"
+                onClick={goNext}
+                disabled={isButtonBusy}
+                className="min-w-28 !bg-slate-950 !text-white hover:!bg-slate-800 disabled:opacity-50"
+              >
                 {isButtonBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Next"}
               </Button>
             ) : (
@@ -416,7 +421,7 @@ export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted
                 type="button"
                 onClick={() => submitMutation.mutate()}
                 disabled={submitMutation.isPending}
-                className="min-w-28"
+                className="min-w-28 !bg-slate-950 !text-white hover:!bg-slate-800 disabled:opacity-50"
               >
                 {submitMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
                 {submitMutation.isPending ? "Submitting..." : "Submit"}

@@ -135,7 +135,12 @@ export function UnplannedDutyReviewModal({ request, isReviewing, onClose, onAppr
             >
               {isReviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Reject"}
             </button>
-            <Button type="button" onClick={onApprove} disabled={isReviewing} className="min-w-28">
+            <Button
+              type="button"
+              onClick={onApprove}
+              disabled={isReviewing}
+              className="min-w-28 !bg-slate-950 !text-white hover:!bg-slate-800 disabled:opacity-50"
+            >
               {isReviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Approve"}
             </Button>
           </footer>
