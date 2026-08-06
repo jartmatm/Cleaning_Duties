@@ -1,5 +1,7 @@
+import Lottie from "lottie-react";
 import { ArrowRight, LogIn } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import underConstructionLottie from "../../assets/under-construction-lottie.json";
 import { Button } from "../../components/ui/button";
 
 export function LandingPage() {
@@ -53,21 +55,14 @@ export function LandingPage() {
 
             <div className="relative min-h-[28rem] lg:min-h-[34rem]" data-gsap-hero-scene>
               <div className="absolute inset-0 rounded-lg border border-slate-200 bg-slate-50 shadow-sm" data-landing-3d-root>
-                <div className="flex h-full items-center justify-center p-8">
-                  <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-950">Landing scene placeholder</p>
-                        <p className="mt-1 text-sm text-slate-500">Ready for GSAP, 3D, Tailwind, and CSS layers.</p>
-                      </div>
-                      <span className="h-3 w-3 rounded-full bg-emerald-400" />
-                    </div>
-                    <div className="mt-6 grid gap-3">
-                      <div className="h-3 rounded bg-slate-200" />
-                      <div className="h-3 w-4/5 rounded bg-slate-200" />
-                      <div className="h-3 w-2/3 rounded bg-slate-200" />
-                    </div>
-                  </div>
+                <div className="flex h-full items-center justify-center p-6 sm:p-8">
+                  <Lottie
+                    animationData={underConstructionLottie}
+                    loop
+                    autoplay
+                    className="h-full max-h-[28rem] w-full max-w-[34rem]"
+                    data-gsap-lottie
+                  />
                 </div>
               </div>
             </div>
