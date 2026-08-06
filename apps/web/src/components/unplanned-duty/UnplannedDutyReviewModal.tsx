@@ -1,5 +1,6 @@
 import { Clock3, Loader2, MapPin, UserRound, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import type { UnplannedDutyRequest } from "../../services/unplanned-duty-service";
 import { formatDateTime } from "../../utils/date-format";
 import { Button } from "../ui/button";
@@ -43,8 +44,16 @@ function EvidenceGroup({ title, photos }: { title: string; photos: string[] }) {
 export function UnplannedDutyReviewModal({ request, isReviewing, onClose, onApprove, onReject }: UnplannedDutyReviewModalProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  useLayoutEffect(() => {
+    const scrollContainer = scrollRef.current;
+    scrollContainer?.scrollTo({ top: 0, behavior: "auto" });
+    const frame = window.requestAnimationFrame(() => scrollContainer?.scrollTo({ top: 0, behavior: "auto" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [request.id]);
+
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: 0, behavior: "auto" }));
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !isReviewing) {
         onClose();
@@ -52,12 +61,12 @@ export function UnplannedDutyReviewModal({ request, isReviewing, onClose, onAppr
     };
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      window.cancelAnimationFrame(frame);
+      document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [isReviewing, onClose]);
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="unplanned-review-title">
       <div className="flex min-h-full items-center justify-center">
         <section ref={scrollRef} className="max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto rounded-lg bg-white shadow-xl ring-1 ring-slate-200">
@@ -132,6 +141,7 @@ export function UnplannedDutyReviewModal({ request, isReviewing, onClose, onAppr
           </footer>
         </section>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

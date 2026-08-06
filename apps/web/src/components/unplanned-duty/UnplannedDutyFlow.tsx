@@ -1,5 +1,6 @@
 import { ArrowLeft, Check, Loader2, MapPin, Plus, Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useMutation } from "@tanstack/react-query";
 import { AppLoader } from "../common/app-loader";
 import { CompletionCelebration } from "../common/completion-celebration";
@@ -24,7 +25,6 @@ type PreviewItem = {
 };
 
 const TOTAL_STEPS = 5;
-const TITLE_SUGGESTIONS = ["Spill cleanup", "Graffiti removal", "Unexpected waste", "Emergency touch-up"];
 
 function wait(milliseconds: number) {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
@@ -122,7 +122,6 @@ function PhotoStep(props: {
         <input
           type="file"
           accept="image/*"
-          capture="environment"
           multiple={props.multiple}
           className="sr-only"
           onChange={(event) => {
@@ -209,7 +208,6 @@ export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted
     await wait(420);
     setStep(nextStep);
     setIsTransitioning(false);
-    window.scrollTo({ top: 0, behavior: "auto" });
   }
 
   async function goNext() {
@@ -229,23 +227,25 @@ export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted
   }
 
   if (showCelebration) {
-    return (
-      <div className="fixed inset-0 z-[90] bg-white">
+    return createPortal(
+      <div className="fixed inset-0 z-[90] h-[100dvh] overflow-hidden bg-white">
         <CompletionCelebration onComplete={onClose} />
-      </div>
+      </div>,
+      document.body,
     );
   }
 
   if (isTransitioning) {
-    return (
-      <div className="fixed inset-0 z-[90] bg-white">
+    return createPortal(
+      <div className="fixed inset-0 z-[90] h-[100dvh] overflow-hidden bg-white">
         <AppLoader fullScreen message="Loading next step..." />
-      </div>
+      </div>,
+      document.body,
     );
   }
 
-  return (
-    <div className="fixed inset-0 z-[80] overflow-y-auto bg-white">
+  return createPortal(
+    <div className="fixed inset-0 z-[80] h-[100dvh] overflow-y-auto overscroll-contain bg-white">
       <div className="flex min-h-[100dvh] flex-col">
         <header className="sticky top-0 z-10 flex items-center justify-between bg-white px-5 py-5 sm:px-8">
           <button
@@ -279,18 +279,6 @@ export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted
                   className="mt-6"
                   autoFocus
                 />
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {TITLE_SUGGESTIONS.map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      type="button"
-                      onClick={() => setTitle(suggestion)}
-                      className="rounded-full bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-200 transition hover:bg-white"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
               </div>
             </>
           ) : null}
@@ -437,6 +425,7 @@ export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted
           </div>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
