@@ -211,6 +211,63 @@ function percent(value: number, total: number) {
   return Number(((value / total) * 100).toFixed(1));
 }
 
+function UnplannedDutyRequestDeck({
+  requests,
+  onSelect,
+}: {
+  requests: UnplannedDutyRequest[];
+  onSelect: (request: UnplannedDutyRequest) => void;
+}) {
+  const [raisedRequestId, setRaisedRequestId] = useState<string | null>(null);
+  const stackedRequests = useMemo(() => [...requests].reverse(), [requests]);
+
+  return (
+    <div className="relative isolate pt-1" style={{ perspective: "1100px" }}>
+      {stackedRequests.map((request, index) => {
+        const depth = Math.min(stackedRequests.length - 1 - index, 4);
+        const isRaised = raisedRequestId === request.id;
+        const horizontalInset = depth * 6;
+
+        return (
+          <button
+            key={request.id}
+            type="button"
+            onClick={() => onSelect(request)}
+            onMouseEnter={() => setRaisedRequestId(request.id)}
+            onMouseLeave={() => setRaisedRequestId(null)}
+            onFocus={() => setRaisedRequestId(request.id)}
+            onBlur={() => setRaisedRequestId(null)}
+            className="relative block h-36 rounded-lg bg-slate-950 p-4 text-left text-white shadow-lg ring-1 ring-white/10 transition-[transform,box-shadow,background-color] duration-300 ease-out hover:bg-slate-900 hover:shadow-2xl focus:outline-none focus:ring-2 focus:ring-slate-400 motion-reduce:transform-none motion-reduce:transition-none"
+            style={{
+              zIndex: isRaised ? stackedRequests.length + 1 : index + 1,
+              marginTop: index === 0 ? 0 : -76,
+              marginLeft: horizontalInset,
+              marginRight: horizontalInset,
+              transform: isRaised
+                ? "translate3d(0, -8px, 56px) rotateX(0deg)"
+                : `translate3d(0, ${depth * 3}px, ${depth * -32}px) rotateX(${depth * 1.25}deg)`,
+              transformOrigin: "center top",
+              transformStyle: "preserve-3d",
+            }}
+            aria-label={`Review ${request.title} submitted by ${request.cleanerName}`}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="truncate font-semibold">{request.title}</p>
+                <p className="mt-1 truncate text-sm text-slate-300">{request.cleanerName}</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">Review</span>
+            </div>
+            <p className="mt-4 line-clamp-2 text-xs leading-5 text-slate-300">
+              {formatDateTime(request.shiftStartedAt)} - {formatDateTime(request.shiftEndsAt)}
+            </p>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ManagerDashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -390,25 +447,7 @@ function ManagerDashboard() {
               ) : unplannedRequests.length === 0 ? (
                 <p className="text-sm text-slate-500">No unplanned duties waiting for review.</p>
               ) : (
-                unplannedRequests.map((request) => (
-                  <button
-                    key={request.id}
-                    type="button"
-                    onClick={() => setSelectedUnplannedRequest(request)}
-                    className="w-full rounded-lg bg-slate-950 p-4 text-left text-white transition hover:-translate-y-0.5 hover:bg-slate-900 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <p className="break-words font-semibold">{request.title}</p>
-                        <p className="mt-1 text-sm text-slate-300">{request.cleanerName}</p>
-                      </div>
-                      <span className="shrink-0 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">Review</span>
-                    </div>
-                    <p className="mt-4 text-xs leading-5 text-slate-300">
-                      {formatDateTime(request.shiftStartedAt)} - {formatDateTime(request.shiftEndsAt)}
-                    </p>
-                  </button>
-                ))
+                <UnplannedDutyRequestDeck requests={unplannedRequests} onSelect={setSelectedUnplannedRequest} />
               )}
             </div>
           </Card>
