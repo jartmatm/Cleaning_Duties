@@ -2,6 +2,7 @@ export * from "./constants/priorities";
 export * from "./constants/statuses";
 export * from "./constants/incident-types";
 export * from "./constants/equipment";
+export * from "./constants/company-palettes";
 export * from "./schemas/duty";
 export * from "./schemas/duty-form";
 export * from "./schemas/auth";

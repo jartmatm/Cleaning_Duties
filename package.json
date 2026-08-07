@@ -9,6 +9,8 @@
   "scripts": {
     "dev:web": "pnpm --filter @cleaning-duties/web dev",
     "dev:api": "pnpm --filter @cleaning-duties/api dev",
+    "dev:mobile": "pnpm --filter @cleaning-duties/mobile start",
+    "ios": "pnpm --filter @cleaning-duties/mobile ios",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r exec tsc --noEmit",
     "start:api": "pnpm --filter @cleaning-duties/api start",
