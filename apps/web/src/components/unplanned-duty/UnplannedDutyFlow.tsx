@@ -99,7 +99,6 @@ function PhotoStep(props: {
   description: string;
   files: File[];
   multiple?: boolean;
-  maxFiles: number;
   onChange: (files: File[]) => void;
 }) {
   const previews = useFilePreviews(props.files);
@@ -109,7 +108,7 @@ function PhotoStep(props: {
       return;
     }
 
-    const nextFiles = [...props.files, ...Array.from(fileList)].slice(0, props.maxFiles);
+    const nextFiles = [...props.files, ...Array.from(fileList)];
     props.onChange(nextFiles);
   }
 
@@ -341,10 +340,10 @@ export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted
 
           {step === 2 ? (
             <PhotoStep
-              title="Add a before photo"
-              description="Add one photo if you captured the area before starting. You can continue without it."
+              title="Add before photos"
+              description="Add before photos if you captured the area before starting. You can continue without them."
               files={beforeFiles}
-              maxFiles={1}
+              multiple
               onChange={setBeforeFiles}
             />
           ) : null}
@@ -352,10 +351,9 @@ export function UnplannedDutyFlow({ cleanerId, site, shift, onClose, onSubmitted
           {step === 3 ? (
             <PhotoStep
               title="Show the result"
-              description="Add up to five after photos if you have them. Evidence is helpful, but optional."
+              description="Add after photos if you have them. Evidence is helpful, but optional."
               files={afterFiles}
               multiple
-              maxFiles={5}
               onChange={setAfterFiles}
             />
           ) : null}
