@@ -1,0 +1,208 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Route, Routes, useLocation } from "react-router-dom";
+import { AppLoader } from "../components/common/app-loader";
+import { ToastViewport } from "../components/common/toast";
+import { useSession } from "../hooks/use-session";
+import { AppLayout } from "../layouts/AppLayout";
+import { AuthLayout } from "../layouts/AuthLayout";
+import { ProtectedRoute } from "../routes/protected-route";
+import { PublicRoute } from "../routes/public-route";
+import { getCompanySettings } from "../services/company-service";
+import { oneSignalService } from "../services/onesignal-service";
+import { getCurrentProfile } from "../services/profile-service";
+import { supabase } from "../services/supabase-client";
+
+const DashboardPage = lazy(() => import("../pages/dashboard/DashboardPage").then((module) => ({ default: module.DashboardPage })));
+const LoginPage = lazy(() => import("../pages/auth/LoginPage").then((module) => ({ default: module.LoginPage })));
+const ResetPasswordPage = lazy(() => import("../pages/auth/ResetPasswordPage").then((module) => ({ default: module.ResetPasswordPage })));
+const DutiesPage = lazy(() => import("../pages/duties/DutiesPage").then((module) => ({ default: module.DutiesPage })));
+const ReportsPage = lazy(() => import("../pages/reports/ReportsPage").then((module) => ({ default: module.ReportsPage })));
+const SiteInfoPage = lazy(() => import("../pages/sites/SiteInfoPage").then((module) => ({ default: module.SiteInfoPage })));
+const SitesPage = lazy(() => import("../pages/sites/SitesPage").then((module) => ({ default: module.SitesPage })));
+const UsersPage = lazy(() => import("../pages/users/UsersPage").then((module) => ({ default: module.UsersPage })));
+const NotFoundPage = lazy(() => import("../pages/not-found/NotFoundPage").then((module) => ({ default: module.NotFoundPage })));
+const CompletionCelebrationPage = lazy(() => import("../pages/celebration/CompletionCelebrationPage").then((module) => ({ default: module.CompletionCelebrationPage })));
+const SettingsPage = lazy(() => import("../pages/settings/SettingsPage").then((module) => ({ default: module.SettingsPage })));
+const PreloadedDutiesPage = lazy(() => import("../pages/settings/PreloadedDutiesPage").then((module) => ({ default: module.PreloadedDutiesPage })));
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchInterval: 20_000,
+      refetchIntervalInBackground: false,
+      refetchOnWindowFocus: true,
+      staleTime: 10_000,
+    },
+  },
+});
+
+type OneSignalProfile = {
+  id: string;
+  company_id: string;
+  role: string;
+};
+
+type OneSignalCompany = {
+  name: string;
+};
+
+function syncOneSignalUser(profile: OneSignalProfile, company: OneSignalCompany, email: string | null | undefined) {
+  void oneSignalService
+    .login(profile.id)
+    .then(() =>
+      Promise.all([
+        oneSignalService.addEmail(email),
+        oneSignalService.addTags({
+          company_id: profile.company_id,
+          company_name: company.name,
+          role: profile.role,
+        }),
+      ]),
+    )
+    .catch(() => undefined);
+}
+
+export function ProductApp() {
+  const { setSession, setEmail, clearSession, setSessionLoading } = useSession();
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function syncSession(showLoader = false) {
+      if (showLoader) setSessionLoading(true);
+
+      const { data } = await supabase.auth.getSession();
+      const session = data.session;
+      if (!mounted) return;
+
+      if (!session?.user) {
+        clearSession();
+        void oneSignalService.logout().catch(() => undefined);
+        return;
+      }
+
+      const profile = await getCurrentProfile(session.user.id);
+      const company = await getCompanySettings(profile.company_id);
+      if (!mounted) return;
+
+      setSession({
+        userId: session.user.id,
+        companyId: profile.company_id,
+        companyName: company.name,
+        companyLogoUrl: company.logoUrl,
+        companyPalette: company.colorPalette,
+        role: profile.role,
+      });
+      setEmail(session.user.email ?? session.user.phone ?? null);
+      syncOneSignalUser(profile, company, session.user.email ?? session.user.phone ?? null);
+    }
+
+    syncSession(true).catch(() => {
+      if (mounted) clearSession();
+    });
+
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+
+      if (!session?.user) {
+        clearSession();
+        void oneSignalService.logout().catch(() => undefined);
+        return;
+      }
+
+      void (async () => {
+        const profile = await getCurrentProfile(session.user.id);
+        const company = await getCompanySettings(profile.company_id);
+        if (!mounted) return;
+
+        setSession({
+          userId: session.user.id,
+          companyId: profile.company_id,
+          companyName: company.name,
+          companyLogoUrl: company.logoUrl,
+          companyPalette: company.colorPalette,
+          role: profile.role,
+        });
+        setEmail(session.user.email ?? session.user.phone ?? null);
+        syncOneSignalUser(profile, company, session.user.email ?? session.user.phone ?? null);
+      })();
+    });
+
+    function handleAppResume() {
+      void syncSession(false).catch(() => {
+        if (mounted) clearSession();
+      });
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") handleAppResume();
+    }
+
+    window.addEventListener("focus", handleAppResume);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener("focus", handleAppResume);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      data.subscription.unsubscribe();
+    };
+  }, [clearSession, setEmail, setSession, setSessionLoading]);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ToastViewport />
+      <ProductRoutes />
+    </QueryClientProvider>
+  );
+}
+
+function ProductRoutes() {
+  return (
+    <>
+      <RouteChangeLoader />
+      <Suspense fallback={<AppLoader fullScreen message="Loading page..." />}>
+        <Routes>
+          <Route path="/login" element={<PublicRoute><AuthLayout><LoginPage /></AuthLayout></PublicRoute>} />
+          <Route path="/reset-password" element={<AuthLayout><ResetPasswordPage /></AuthLayout>} />
+          <Route path="/dashboard" element={<ProtectedRoute><AppLayout><DashboardPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/sites" element={<ProtectedRoute><AppLayout><SitesPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/sites/:siteId/info" element={<ProtectedRoute><AppLayout><SiteInfoPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/duties" element={<ProtectedRoute><AppLayout><DutiesPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/reports" element={<ProtectedRoute><AppLayout><ReportsPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute><AppLayout><UsersPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><AppLayout><SettingsPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/settings/preloaded-duties" element={<ProtectedRoute><AppLayout><PreloadedDutiesPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/celebration" element={<ProtectedRoute><CompletionCelebrationPage /></ProtectedRoute>} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Suspense>
+    </>
+  );
+}
+
+function RouteChangeLoader() {
+  const location = useLocation();
+  const mounted = useRef(false);
+  const [isChangingRoute, setIsChangingRoute] = useState(false);
+
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+
+    setIsChangingRoute(true);
+    const timeout = window.setTimeout(() => setIsChangingRoute(false), 350);
+    return () => window.clearTimeout(timeout);
+  }, [location.pathname]);
+
+  if (!isChangingRoute) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-white">
+      <AppLoader fullScreen message="Loading page..." />
+    </div>
+  );
+}
