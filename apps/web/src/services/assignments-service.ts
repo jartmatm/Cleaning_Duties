@@ -42,7 +42,7 @@ export async function listAssignableMembers(siteId: string) {
 export async function listDutyAssignments(dutyId: string) {
   const { data, error } = await supabase
     .from("duty_assignments")
-    .select("profile_id, profiles(id, full_name, role)")
+    .select("profile_id, assigned_at, completed_at, profiles(id, full_name, role)")
     .eq("duty_id", dutyId);
 
   if (error) {
@@ -52,6 +52,8 @@ export async function listDutyAssignments(dutyId: string) {
   return (data ?? []).map((row) => ({
     profileId: row.profile_id,
     name: ((row as unknown as { profiles: { full_name: string } | null }).profiles?.full_name ?? "Unknown"),
+    assignedAt: row.assigned_at,
+    completedAt: row.completed_at,
   }));
 }
 

@@ -49,6 +49,14 @@ export type DutyItem = {
   updatedAt: string;
 };
 
+export type DutyComment = {
+  id: string;
+  profileId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+};
+
 function mapDuty(row: DutyRow): DutyItem {
   return {
     id: row.id,
@@ -463,6 +471,36 @@ export async function addDutyComment(params: {
   if (error) {
     throw new Error(error.message);
   }
+}
+
+export async function listDutyComments(dutyId: string): Promise<DutyComment[]> {
+  const { data, error } = await supabase
+    .from("duty_comments")
+    .select("id, profile_id, body, created_at, author:profiles!duty_comments_profile_id_fkey(full_name)")
+    .eq("duty_id", dutyId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map((row) => {
+    const comment = row as unknown as {
+      id: string;
+      profile_id: string;
+      body: string;
+      created_at: string;
+      author: { full_name: string } | null;
+    };
+
+    return {
+      id: comment.id,
+      profileId: comment.profile_id,
+      authorName: comment.author?.full_name ?? "Team member",
+      body: comment.body,
+      createdAt: comment.created_at,
+    };
+  });
 }
 
 export async function deleteDuty(dutyId: string) {
