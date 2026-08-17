@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { CleanerDutyDetailModal } from "../../components/common/cleaner-duty-detail-modal";
+import { DutyProgressModal } from "../../components/common/duty-progress-modal";
 import { DutyStatusBadge } from "../../components/common/duty-status-badge";
 import { PageHeader } from "../../components/common/page-header";
 import { QuickActions } from "../../components/common/quick-actions";
@@ -284,6 +285,7 @@ function ManagerDashboard() {
   const { userId, companyId, role, activeSiteId } = useSession();
   const usesAssignedSites = role === "Supervisor";
   const [activeFilter, setActiveFilter] = useState<ManagerDashboardFilter | null>(null);
+  const [selectedDuty, setSelectedDuty] = useState<DutyItem | null>(null);
   const [selectedUnplannedRequest, setSelectedUnplannedRequest] = useState<UnplannedDutyRequest | null>(null);
   const { data: profile } = useQuery({
     queryKey: ["dashboard-profile", userId],
@@ -440,7 +442,7 @@ function ManagerDashboard() {
                       <DutyStatusBadge status={item.status} />
                     </div>
                   </div>
-                  <Button variant="secondary">Open</Button>
+                  <Button variant="secondary" onClick={() => setSelectedDuty(item)}>Open</Button>
                 </div>
               ))
             )}
@@ -468,6 +470,14 @@ function ManagerDashboard() {
         <SectionTitle title="Weekly reports" description="A quick operating view for managers and supervisors." />
         <BarChartBenchmark data={weeklyReportData} />
       </Card>
+
+      {selectedDuty ? (
+        <DutyProgressModal
+          duty={selectedDuty}
+          site={sites.find((site) => site.id === selectedDuty.siteId) ?? activeSite}
+          onClose={() => setSelectedDuty(null)}
+        />
+      ) : null}
 
       {selectedUnplannedRequest ? (
         <UnplannedDutyReviewModal
