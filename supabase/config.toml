@@ -1,1 +1,6 @@
 project_id = "cleaning-duties"
+
+[functions.cleanup-archived-duties]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/cleanup-archived-duties/index.ts"
