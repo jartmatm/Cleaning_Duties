@@ -101,9 +101,7 @@ async function advanceSchedules(duties: Duty[]) {
 
 export async function listDuties(input: { siteId: string; profileId: string; role: UserRole }, advance = true): Promise<Duty[]> {
   if (advance) {
-    const rpcName = input.role === "Cleaner" ? "cleanup_archived_duties_for_profile" : "cleanup_archived_duties_for_site";
-    const rpcArgs = input.role === "Cleaner" ? { p_profile_id: input.profileId } : { p_site_id: input.siteId };
-    const { error } = await supabase.rpc(rpcName, rpcArgs);
+    const { error } = await supabase.functions.invoke("cleanup-archived-duties", { body: {} });
     if (error) throw new Error(error.message);
   }
 

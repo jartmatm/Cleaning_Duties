@@ -5,3 +5,8 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/notification-events/deno.json"
 entrypoint = "./functions/notification-events/index.ts"
+
+[functions.cleanup-archived-duties]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/cleanup-archived-duties/index.ts"

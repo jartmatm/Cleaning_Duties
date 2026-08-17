@@ -228,16 +228,8 @@ async function advanceDutySchedule(duties: DutyItem[]) {
   return advanced;
 }
 
-async function cleanupArchivedDutiesForSite(siteId: string) {
-  const { error } = await supabase.rpc("cleanup_archived_duties_for_site", { p_site_id: siteId });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-}
-
-async function cleanupArchivedDutiesForProfile(profileId: string) {
-  const { error } = await supabase.rpc("cleanup_archived_duties_for_profile", { p_profile_id: profileId });
+async function cleanupArchivedDuties() {
+  const { error } = await supabase.functions.invoke("cleanup-archived-duties", { body: {} });
 
   if (error) {
     throw new Error(error.message);
@@ -273,7 +265,7 @@ async function toFormInput(siteId: string, values: DutyFormInput) {
 
 export async function listDuties(siteId: string, search = "", advanceSchedule = true) {
   if (advanceSchedule) {
-    await cleanupArchivedDutiesForSite(siteId);
+    await cleanupArchivedDuties();
   }
 
   let query = supabase
@@ -303,7 +295,7 @@ export async function listDuties(siteId: string, search = "", advanceSchedule = 
 
 export async function listAssignedDuties(profileId: string, advanceSchedule = true) {
   if (advanceSchedule) {
-    await cleanupArchivedDutiesForProfile(profileId);
+    await cleanupArchivedDuties();
   }
 
   const { data, error } = await supabase
