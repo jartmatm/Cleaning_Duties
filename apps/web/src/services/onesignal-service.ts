@@ -1,4 +1,4 @@
-import OneSignal from "react-onesignal";
+import OneSignal, { type NotificationClickEvent } from "react-onesignal";
 
 const ONESIGNAL_APP_ID = "3d22eb0b-ce92-4065-b9dc-bf43c4e5d10d";
 const ONESIGNAL_SUBSCRIPTION_DIALOG_KEY = "cleaning-duties.onesignal-subscription-dialog-shown";
@@ -6,13 +6,10 @@ const ONESIGNAL_SUBSCRIPTION_DIALOG_KEY = "cleaning-duties.onesignal-subscriptio
 type OneSignalTags = Record<string, string | number | boolean | null | undefined>;
 
 let initPromise: Promise<void> | null = null;
+let clickListenerRegistered = false;
 
 function canUseOneSignal() {
   return typeof window !== "undefined" && window.isSecureContext && "serviceWorker" in navigator && "Notification" in window;
-}
-
-function isServerAssignedSubscriptionId(subscriptionId: string | null | undefined) {
-  return Boolean(subscriptionId && !subscriptionId.startsWith("local-"));
 }
 
 function hasShownSubscriptionDialog() {
@@ -23,25 +20,28 @@ function markSubscriptionDialogShown() {
   localStorage.setItem(ONESIGNAL_SUBSCRIPTION_DIALOG_KEY, "true");
 }
 
-async function maybeShowSubscriptionDialog(subscriptionId: string | null | undefined) {
-  if (!isServerAssignedSubscriptionId(subscriptionId) || hasShownSubscriptionDialog()) {
+async function maybeShowSubscriptionDialog() {
+  if (hasShownSubscriptionDialog() || OneSignal.Notifications.permission) {
     return;
   }
 
   markSubscriptionDialogShown();
-  window.alert(
-    "Your OneSignal SDK integration is complete!\n\nYou can now send Push Notifications & In-App Messages through OneSignal. Tap below to enable push notifications.",
-  );
-  await OneSignal.Notifications.requestPermission();
+  await OneSignal.Slidedown.promptPush({ forceSlidedownOverNative: true });
 }
 
-async function setupPushSubscriptionObserver() {
-  OneSignal.User.PushSubscription.addEventListener("change", (event) => {
-    void maybeShowSubscriptionDialog(event.current.id);
-  });
+async function setupPushSubscriptionPrompt() {
+  await maybeShowSubscriptionDialog();
+}
 
-  const subscriptionId = OneSignal.User.PushSubscription.id;
-  await maybeShowSubscriptionDialog(subscriptionId);
+function setupNotificationClickListener() {
+  if (clickListenerRegistered) return;
+
+  OneSignal.Notifications.addEventListener("click", (event: NotificationClickEvent) => {
+    const data = event.notification.additionalData as { dutyId?: unknown } | undefined;
+    const destination = typeof data?.dutyId === "string" ? "/duties" : "/dashboard";
+    if (window.location.pathname !== destination) window.location.assign(destination);
+  });
+  clickListenerRegistered = true;
 }
 
 export const oneSignalService = {
@@ -55,7 +55,10 @@ export const oneSignalService = {
       serviceWorkerPath: "onesignal/OneSignalSDKWorker.js",
       serviceWorkerParam: { scope: "/onesignal/" },
       allowLocalhostAsSecureOrigin: true,
-    }).then(setupPushSubscriptionObserver);
+    }).then(async () => {
+      setupNotificationClickListener();
+      await setupPushSubscriptionPrompt();
+    });
 
     await initPromise;
   },

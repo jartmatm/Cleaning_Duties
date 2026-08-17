@@ -5,6 +5,7 @@ import { hasSupabaseConfig } from "@/lib/config";
 import { queryClient } from "@/lib/query-client";
 import { registerSupabaseAutoRefresh, supabase } from "@/lib/supabase";
 import { getCompany, getProfile, listAccessibleSites } from "@/services/session-service";
+import { oneSignalService } from "@/services/onesignal-service";
 import type { Company, Profile, Site } from "@/types/domain";
 
 type SessionContextValue = {
@@ -66,6 +67,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setCompany(nextCompany);
       setSites(nextSites);
       setActiveSiteIdState(nextActiveSiteId);
+      oneSignalService.identify(nextProfile, nextCompany, nextSession.user.email);
       if (nextActiveSiteId) await AsyncStorage.setItem(activeSiteKey(nextProfile.id), nextActiveSiteId);
     } catch (loadError) {
       if (sequence !== loadSequence.current) return;
@@ -121,6 +123,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     await supabase.removeAllChannels();
     queryClient.clear();
     if (currentProfile) await AsyncStorage.removeItem(activeSiteKey(currentProfile.id));
+    oneSignalService.logout();
     const { error: signOutError } = await supabase.auth.signOut();
     if (signOutError) throw new Error(signOutError.message);
   }, [profile]);

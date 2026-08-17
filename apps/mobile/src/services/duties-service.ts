@@ -2,6 +2,7 @@ import type { DutyStatus, UserRole } from "@cleaning-duties/shared";
 import { supabase } from "@/lib/supabase";
 import type { Duty, DutyComment, DutyDetail, Incident } from "@/types/domain";
 import { mapIncidentRow, type IncidentRow } from "./incidents-service";
+import { emitNotificationEventSafely } from "./notification-events-service";
 
 type DutyRow = {
   id: string;
@@ -79,8 +80,20 @@ async function advanceSchedules(duties: Duty[]) {
     const shouldAdvanceScheduled = duty.status === "Scheduled" && startsAt !== null && startsAt <= now;
     const shouldCloseShift = dueDate !== null && dueDate <= now && !["Archived", "Missed", "Incomplete"].includes(duty.status);
     if (!shouldAdvanceScheduled && !shouldCloseShift) continue;
-    const { error } = await supabase.rpc("advance_duty_schedule", { p_duty_id: duty.id });
+    const { data: nextDutyId, error } = await supabase.rpc("advance_duty_schedule", { p_duty_id: duty.id });
     if (error) throw new Error(error.message);
+    if (typeof nextDutyId === "string") {
+      const { data: assignments, error: assignmentError } = await supabase
+        .from("duty_assignments")
+        .select("profile_id")
+        .eq("duty_id", nextDutyId);
+      if (assignmentError) throw new Error(assignmentError.message);
+      await emitNotificationEventSafely({
+        event: "duty_assigned",
+        dutyId: nextDutyId,
+        assignedUserIds: (assignments ?? []).map((assignment) => assignment.profile_id),
+      });
+    }
     changed = true;
   }
   return changed;
@@ -162,7 +175,11 @@ export async function transitionDuty(duty: Duty, nextStatus: "In Progress" | "Co
     .select(DUTY_SELECT)
     .single();
   if (error) throw new Error(error.message);
-  return mapDuty(data as DutyRow);
+  const updatedDuty = mapDuty(data as DutyRow);
+  if (nextStatus === "Completed") {
+    await emitNotificationEventSafely({ event: "duty_completed", dutyId: duty.id });
+  }
+  return updatedDuty;
 }
 
 export async function saveDutyEvidence(dutyId: string, beforePhotos: string[], afterPhotos: string[]) {

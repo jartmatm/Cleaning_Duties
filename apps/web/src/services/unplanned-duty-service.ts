@@ -1,5 +1,6 @@
 import type { DutyItem } from "./duties-service";
 import { deleteDutyEvidencePhotos, uploadUnplannedDutyPhotos } from "./duty-photo-service";
+import { emitNotificationEventSafely } from "./notification-events-service";
 import { supabase } from "./supabase-client";
 
 export type ActiveDutyShift = {
@@ -153,7 +154,9 @@ export async function submitUnplannedDutyRequest(input: {
       throw new Error(error.message);
     }
 
-    return mapRequest(data as unknown as UnplannedDutyRequestRow);
+    const request = mapRequest(data as unknown as UnplannedDutyRequestRow);
+    await emitNotificationEventSafely({ event: "unplanned_duty_submitted", requestId: request.id });
+    return request;
   } catch (error) {
     const uploadedPhotos = [...beforePhotos, ...afterPhotos];
     if (uploadedPhotos.length > 0) {

@@ -17,6 +17,27 @@ Create `apps/web/.env.local` with:
 - `VITE_API_BASE_URL`
 - `VITE_DEMO_REQUEST_ENDPOINT` optional, for a server-side demo request form handler
 
+The OneSignal App ID used by the web and mobile clients is public. Never expose
+the OneSignal REST API key in Vite or Expo environment variables.
+
+The authenticated `notification-events` Supabase Edge Function sends transactional
+push and email messages. Configure its server-side secrets with:
+
+```bash
+npx supabase secrets set \
+  ONESIGNAL_APP_ID=3d22eb0b-ce92-4065-b9dc-bf43c4e5d10d \
+  ONESIGNAL_REST_API_KEY=your-private-app-api-key \
+  APP_URL=https://cleaning-duties-web.vercel.app \
+  --project-ref rbkrhaylmxnddwupetck
+
+npx supabase functions deploy notification-events \
+  --project-ref rbkrhaylmxnddwupetck
+```
+
+The OneSignal app must have Email and Web Push configured, and its Web Site URL
+must exactly match the production origin. iOS Push must use the same bundle ID
+as Expo: `com.cleaningduties.app`.
+
 Run `apps/api` with:
 
 - `SUPABASE_URL`
@@ -41,9 +62,9 @@ Set these production environment variables:
 - Render API: `CORS_ORIGIN` must be the deployed Vercel web origin
 - Render API: `SUPABASE_URL`
 - Render API: `SUPABASE_SERVICE_ROLE_KEY`
-- Render API: `ONESIGNAL_APP_ID`
-- Render API: `ONESIGNAL_REST_API_KEY`
+- Supabase Edge Function: `ONESIGNAL_APP_ID`
+- Supabase Edge Function: `ONESIGNAL_REST_API_KEY`
 - Render API: `STRIPE_SECRET_KEY`
 - Render API: `STRIPE_WEBHOOK_SECRET`
 - Render API: `STRIPE_PRICE_ID`
-- Render API: `APP_URL`, for example `https://cleaning-duties-web.vercel.app`
+- Supabase Edge Function: `APP_URL`, for example `https://cleaning-duties-web.vercel.app`

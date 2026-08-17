@@ -1,4 +1,6 @@
 import { authLoginSchema, managerSignupSchema, type AuthLoginInput, type ManagerSignupInput } from "@cleaning-duties/shared";
+import { emitNotificationEventSafely } from "./notification-events-service";
+import { oneSignalService } from "./onesignal-service";
 import { setRememberMe, supabase } from "./supabase-client";
 
 type LoginResult =
@@ -31,6 +33,16 @@ export async function signInWithCredentials(input: unknown): Promise<LoginResult
 
   if (result.error) {
     return { ok: false, message: result.error.message };
+  }
+
+  if (result.data.user) {
+    try {
+      await oneSignalService.login(result.data.user.id);
+      await oneSignalService.addEmail(result.data.user.email);
+    } catch (error) {
+      console.warn("OneSignal user registration failed", error);
+    }
+    await emitNotificationEventSafely({ event: "session_started" });
   }
 
   return { ok: true };

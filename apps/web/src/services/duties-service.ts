@@ -1,6 +1,7 @@
 import { dutyFormSchema, type DutyFormInput, type DutyStatus } from "@cleaning-duties/shared";
 import { supabase } from "./supabase-client";
-import { replaceDutyAssignments } from "./assignments-service";
+import { listDutyAssignments, replaceDutyAssignments } from "./assignments-service";
+import { emitNotificationEventSafely } from "./notification-events-service";
 
 export type DutyRow = {
   id: string;
@@ -201,9 +202,17 @@ async function advanceDutySchedule(duties: DutyItem[]) {
       continue;
     }
 
-    const { error } = await supabase.rpc("advance_duty_schedule", { p_duty_id: duty.id });
+    const { data: nextDutyId, error } = await supabase.rpc("advance_duty_schedule", { p_duty_id: duty.id });
     if (error) {
       throw new Error(error.message);
+    }
+    if (typeof nextDutyId === "string") {
+      const assignments = await listDutyAssignments(nextDutyId);
+      await emitNotificationEventSafely({
+        event: "duty_assigned",
+        dutyId: nextDutyId,
+        assignedUserIds: assignments.map((assignment) => assignment.profileId),
+      });
     }
     advanced = true;
   }
@@ -419,7 +428,11 @@ export async function updateDutyStatus(dutyId: string, status: DutyRow["status"]
     throw new Error(error.message);
   }
 
-  return mapDuty(data as DutyRow);
+  const duty = mapDuty(data as DutyRow);
+  if (status === "Completed") {
+    await emitNotificationEventSafely({ event: "duty_completed", dutyId });
+  }
+  return duty;
 }
 
 export async function replaceDutyEvidencePhotos(params: {

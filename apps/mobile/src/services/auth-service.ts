@@ -1,13 +1,19 @@
 import { authLoginSchema, type AuthLoginInput } from "@cleaning-duties/shared";
 import { supabase } from "@/lib/supabase";
+import { emitNotificationEventSafely } from "./notification-events-service";
+import { oneSignalService } from "./onesignal-service";
 
 export async function signIn(input: AuthLoginInput) {
   const values = authLoginSchema.parse(input);
   const credentials = values.identifier.includes("@")
     ? { email: values.identifier.trim(), password: values.password }
     : { phone: values.identifier.trim(), password: values.password };
-  const { error } = await supabase.auth.signInWithPassword(credentials);
+  const { data, error } = await supabase.auth.signInWithPassword(credentials);
   if (error) throw new Error(error.message);
+  if (data.session) {
+    oneSignalService.identifyUser(data.user.id, data.user.email);
+    await emitNotificationEventSafely({ event: "session_started" });
+  }
 }
 
 export async function requestPasswordReset(email: string) {

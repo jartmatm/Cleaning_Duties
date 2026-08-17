@@ -10,9 +10,20 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cleaningduties.app",
+      "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "Cleaning Duties uses the camera to capture duty and incident evidence.",
-        "NSPhotoLibraryUsageDescription": "Cleaning Duties uses your photo library to attach duty and incident evidence."
+        "NSPhotoLibraryUsageDescription": "Cleaning Duties uses your photo library to attach duty and incident evidence.",
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
+        "OneSignal_suppress_launch_urls": true
+      },
+      "entitlements": {
+        "aps-environment": "development",
+        "com.apple.security.application-groups": [
+          "group.com.cleaningduties.app.onesignal"
+        ]
       }
     },
     "android": {
@@ -31,6 +42,13 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      [
+        "onesignal-expo-plugin",
+        {
+          "mode": "development",
+          "disableLocation": true
+        }
+      ],
       "expo-router",
       [
         "expo-image-picker",

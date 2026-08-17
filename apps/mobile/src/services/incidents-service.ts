@@ -1,6 +1,7 @@
 import type { IncidentType } from "@cleaning-duties/shared";
 import { supabase } from "@/lib/supabase";
 import type { Incident } from "@/types/domain";
+import { emitNotificationEventSafely } from "./notification-events-service";
 
 export type IncidentRow = {
   id: string;
@@ -69,5 +70,7 @@ export async function createIncident(input: {
     .select("id, duty_id, site_id, reported_by, incident_type, details, resolved_at, created_at, updated_at")
     .single();
   if (error) throw new Error(error.message);
-  return mapIncidentRow(data as IncidentRow);
+  const incident = mapIncidentRow(data as IncidentRow);
+  await emitNotificationEventSafely({ event: "incident_reported", incidentId: incident.id });
+  return incident;
 }

@@ -1,1 +1,7 @@
 project_id = "cleaning-duties"
+
+[functions.notification-events]
+enabled = true
+verify_jwt = true
+import_map = "./functions/notification-events/deno.json"
+entrypoint = "./functions/notification-events/index.ts"

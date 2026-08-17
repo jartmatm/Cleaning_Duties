@@ -1,5 +1,5 @@
 import { supabase } from "./supabase-client";
-import { apiUrl } from "./api-client";
+import { emitNotificationEventSafely } from "./notification-events-service";
 
 export type SiteMemberRow = {
   profile_id: string;
@@ -55,64 +55,52 @@ export async function listDutyAssignments(dutyId: string) {
   }));
 }
 
-export async function replaceDutyAssignments(dutyId: string, siteId: string, assignedUserIds: string[], assignedBy: string) {
+export async function replaceDutyAssignments(dutyId: string, _siteId: string, assignedUserIds: string[], assignedBy: string) {
   const uniqueAssignedUserIds = Array.from(new Set(assignedUserIds));
-  const { error: deleteError } = await supabase.from("duty_assignments").delete().eq("duty_id", dutyId);
-
-  if (deleteError) {
-    throw new Error(deleteError.message);
-  }
-
-  if (uniqueAssignedUserIds.length === 0) {
-    return;
-  }
-
-  const { data: insertedAssignments, error: insertError } = await supabase
+  const { data: currentAssignments, error: currentError } = await supabase
     .from("duty_assignments")
-    .insert(
-      uniqueAssignedUserIds.map((profileId) => ({
-        duty_id: dutyId,
-        profile_id: profileId,
-        assigned_by: assignedBy,
-      })),
-    )
-    .select("profile_id");
+    .select("profile_id")
+    .eq("duty_id", dutyId);
 
-  if (insertError) {
-    throw new Error(insertError.message);
+  if (currentError) throw new Error(currentError.message);
+
+  const currentIds = new Set((currentAssignments ?? []).map((assignment) => assignment.profile_id));
+  const nextIds = new Set(uniqueAssignedUserIds);
+  const removedIds = [...currentIds].filter((profileId) => !nextIds.has(profileId));
+  const addedIds = uniqueAssignedUserIds.filter((profileId) => !currentIds.has(profileId));
+
+  if (removedIds.length > 0) {
+    const { error: deleteError } = await supabase
+      .from("duty_assignments")
+      .delete()
+      .eq("duty_id", dutyId)
+      .in("profile_id", removedIds);
+    if (deleteError) throw new Error(deleteError.message);
   }
 
-  if ((insertedAssignments ?? []).length !== uniqueAssignedUserIds.length) {
-    throw new Error("Duty assignments were not saved. Check manager permissions for this site.");
-  }
+  if (addedIds.length > 0) {
+    const { data: insertedAssignments, error: insertError } = await supabase
+      .from("duty_assignments")
+      .insert(
+        addedIds.map((profileId) => ({
+          duty_id: dutyId,
+          profile_id: profileId,
+          assigned_by: assignedBy,
+        })),
+      )
+      .select("profile_id");
 
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
-
-    if (!accessToken) {
-      return;
+    if (insertError) throw new Error(insertError.message);
+    if ((insertedAssignments ?? []).length !== addedIds.length) {
+      throw new Error("Duty assignments were not saved. Check manager permissions for this site.");
     }
+  }
 
-    const response = await fetch(apiUrl("/duty-notifications/assignments"), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        dutyId,
-        siteId,
-        assignedUserIds: uniqueAssignedUserIds,
-        assignedBy,
-      }),
+  if (uniqueAssignedUserIds.length > 0) {
+    await emitNotificationEventSafely({
+      event: "duty_assigned",
+      dutyId,
+      assignedUserIds: uniqueAssignedUserIds,
     });
-
-    if (!response.ok) {
-      const text = await response.text();
-      console.warn("Duty notification request failed", text);
-    }
-  } catch (error) {
-    console.warn("Duty notification request failed", error);
   }
 }

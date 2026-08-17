@@ -38,6 +38,7 @@ EXPO_PUBLIC_SUPABASE_URL=
 EXPO_PUBLIC_SUPABASE_ANON_KEY=
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 EXPO_PUBLIC_API_BASE_URL=
+EXPO_PUBLIC_ONESIGNAL_APP_ID=3d22eb0b-ce92-4065-b9dc-bf43c4e5d10d
 ```
 
 Either the anon key or publishable key is required. Never add a service-role key, Stripe secret, OneSignal REST API key, or webhook secret to Expo.
@@ -71,7 +72,8 @@ pnpm android
 4. It reads `site_members` and fetches only sites visible through current RLS policies.
 5. A previously selected site is restored only when it remains accessible.
 6. Missing profiles or site access produce explicit recoverable states.
-7. Sign out removes Realtime channels, query cache, persisted active-site state, and the Supabase session.
+7. The restored profile UUID is registered with OneSignal as the stable `external_id`.
+8. Sign out removes Realtime channels, query cache, persisted active-site state, the OneSignal identity, and the Supabase session.
 
 Email and phone sign-in use the shared `authLoginSchema`. Password reset deep-links through the `cleaningduties` app scheme.
 
@@ -81,7 +83,8 @@ The app follows the same boundary as the web client:
 
 - Direct Supabase access with the authenticated user session for profiles, sites, duties, assignments, comments, evidence, incidents, notifications, service reports, and unplanned-duty requests.
 - Existing PostgreSQL functions for duty schedule advancement, archived-duty cleanup, and unplanned-duty review.
-- The Express API remains the boundary for invitations, billing, Stripe, OneSignal delivery, and other service-role operations. Those operations are not duplicated in the mobile client.
+- The Express API remains the boundary for invitations, billing, Stripe, and other service-role operations.
+- The authenticated Supabase `notification-events` Edge Function sends OneSignal push and email messages without exposing the REST API key to either client.
 
 RLS remains the security boundary. UI visibility is only an additional usability control.
 
@@ -108,9 +111,17 @@ pnpm ios
 
 The initial simulator run can validate routing and missing configuration without credentials. Real authentication and data mutation require the public Supabase variables in `apps/mobile/.env`.
 
-## Known Limitations
+## Push Notifications
 
-- Native OneSignal device registration is not enabled yet. The MVP reads the existing `notifications` table, supports read state, and deep-links to duties.
+- Native OneSignal registration is enabled for iOS and Android development builds.
+- Expo Go cannot load the native OneSignal SDK; use a development build, TestFlight, or an App Store build on a real device.
+- On sign-in and session restore, the profile UUID is registered as OneSignal `external_id`, with company and role tags.
+- Assignment, recurring assignment, completion, incident, unplanned-duty, and sign-in events are delivered through Supabase.
+- Notification clicks open the matching duty when one is present; operational review alerts open the appropriate app section.
+- The current Expo plugin mode and `aps-environment` are `development`. Change both to `production` for TestFlight and App Store builds.
+- Configure Apple Push credentials and bundle ID `com.cleaningduties.app` in the OneSignal dashboard before building for a physical iPhone.
+
+## Known Limitations
 - Managers and supervisors can review operational records and unplanned work, but duty creation/editing remains in the web application for this first mobile slice.
 - Service report generation and PDF download remain in the web application; mobile lists saved reports visible through RLS.
 - Offline mode preserves in-memory reads and blocks mutations. It does not optimistically complete duties.
@@ -120,7 +131,7 @@ The initial simulator run can validate routing and missing configuration without
 ## Next Steps
 
 1. Add the public mobile environment values and run authenticated simulator verification.
-2. Configure the iOS application in OneSignal and Apple Push Notification service, then map the authenticated profile ID to OneSignal `external_id`.
+2. Add Apple Push credentials to the OneSignal app and validate delivery on a physical iPhone development build.
 3. Add manager and supervisor duty authoring after the cleaner execution workflow has completed field testing.
 4. Add durable encrypted read persistence and a transactional offline queue only after conflict semantics are agreed.
 

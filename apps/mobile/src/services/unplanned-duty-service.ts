@@ -2,6 +2,7 @@ import { randomUUID } from "expo-crypto";
 import { supabase } from "@/lib/supabase";
 import type { ActiveDutyShift, UnplannedDutyRequest } from "@/types/domain";
 import { deleteStoredPhotos, uploadUnplannedPhotos, type LocalPhoto } from "./photo-service";
+import { emitNotificationEventSafely } from "./notification-events-service";
 
 type RequestRow = {
   id: string;
@@ -108,7 +109,9 @@ export async function submitUnplannedRequest(input: {
       .select(REQUEST_SELECT)
       .single();
     if (error) throw new Error(error.message);
-    return mapRequest(data as unknown as RequestRow);
+    const request = mapRequest(data as unknown as RequestRow);
+    await emitNotificationEventSafely({ event: "unplanned_duty_submitted", requestId: request.id });
+    return request;
   } catch (error) {
     const uploaded = [...beforeUrls, ...afterUrls];
     if (uploaded.length > 0) await deleteStoredPhotos(input.storageBucket, uploaded).catch(() => undefined);
