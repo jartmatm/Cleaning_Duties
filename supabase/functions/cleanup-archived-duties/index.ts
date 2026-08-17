@@ -31,6 +31,7 @@ type DutyRow = {
 type DutyPhotoRow = {
   duty_id: string;
   storage_path: string;
+  photo_type: string;
 };
 
 type StorageObject = {
@@ -179,8 +180,10 @@ Deno.serve(async (request) => {
     for (const duty of duties) {
       const site = siteById.get(duty.site_id);
       if (!site) continue;
+
+      // Reference media is a permanent library reused by preloaded and recurring duties.
+      addMediaObjects(protectedObjects, site, [duty.reference_photos]);
       addMediaObjects(eligibleDutyIds.has(duty.id) ? candidateObjects : protectedObjects, site, [
-        duty.reference_photos,
         duty.completion_photos,
         duty.before_photos,
         duty.after_photos,
@@ -205,7 +208,7 @@ Deno.serve(async (request) => {
     for (const dutyIdBatch of chunks(duties.map((duty) => duty.id), DATABASE_BATCH_SIZE)) {
       const dutyPhotos = await fetchAllRows<DutyPhotoRow>((from, to) => admin
         .from("duty_photos")
-        .select("duty_id, storage_path")
+        .select("duty_id, storage_path, photo_type")
         .in("duty_id", dutyIdBatch)
         .order("id")
         .range(from, to));
@@ -214,7 +217,8 @@ Deno.serve(async (request) => {
         const site = duty ? siteById.get(duty.site_id) : null;
         if (!site) continue;
         const object = storageObjectForSite(site, photo.storage_path, true);
-        if (object) (eligibleDutyIds.has(photo.duty_id) ? candidateObjects : protectedObjects).set(objectKey(object), object);
+        const isReference = photo.photo_type.trim().toLowerCase().includes("reference");
+        if (object) (eligibleDutyIds.has(photo.duty_id) && !isReference ? candidateObjects : protectedObjects).set(objectKey(object), object);
       }
     }
 
