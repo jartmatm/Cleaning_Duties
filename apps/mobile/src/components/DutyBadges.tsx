@@ -20,12 +20,12 @@ const priorityColors: Record<DutyPriority, { background: string; text: string }>
   Periodical: { background: "#f4f3ff", text: "#5925dc" },
 };
 
-function Badge({ label, colors }: { label: string; colors: { background: string; text: string } }) {
-  return <View style={[styles.badge, { backgroundColor: colors.background }]}><Text style={[styles.label, { color: colors.text }]}>{label}</Text></View>;
+function Badge({ label, colors, rounded = false }: { label: string; colors: { background: string; text: string }; rounded?: boolean }) {
+  return <View style={[styles.badge, rounded ? styles.roundedBadge : styles.pillBadge, { backgroundColor: colors.background }]}><Text style={[styles.label, { color: colors.text }]}>{label}</Text></View>;
 }
 
 export function DutyStatusBadge({ status }: { status: DutyStatus }) {
-  return <Badge label={status} colors={statusColors[status]} />;
+  return <Badge label={status} colors={statusColors[status]} rounded />;
 }
 
 export function PriorityBadge({ priority }: { priority: DutyPriority }) {
@@ -33,6 +33,8 @@ export function PriorityBadge({ priority }: { priority: DutyPriority }) {
 }
 
 const styles = StyleSheet.create({
-  badge: { alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5 },
+  badge: { alignSelf: "flex-start", paddingHorizontal: 9, paddingVertical: 5 },
+  roundedBadge: { borderRadius: 8 },
+  pillBadge: { borderRadius: 999 },
   label: { fontSize: 11, fontWeight: "800" },
 });
