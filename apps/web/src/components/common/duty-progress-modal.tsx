@@ -9,6 +9,7 @@ import {
   ImageIcon,
   Loader2,
   MessageSquareText,
+  Play,
   Repeat2,
   Users,
   X,
@@ -19,6 +20,7 @@ import { listDutyAssignments } from "../../services/assignments-service";
 import { listDutyComments, type DutyItem } from "../../services/duties-service";
 import type { SiteItem } from "../../services/sites-service";
 import { formatDateTime } from "../../utils/date-format";
+import { getReferenceMediaType } from "../../utils/reference-media";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { DutyStatusBadge } from "./duty-status-badge";
@@ -107,6 +109,7 @@ export function DutyProgressModal({ duty, site, onClose }: DutyProgressModalProp
   const palette = getCompanyPalette(companyPalette);
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const [photoViewer, setPhotoViewer] = useState<PhotoViewer | null>(null);
+  const [viewerTouchStart, setViewerTouchStart] = useState<{ x: number; y: number } | null>(null);
   const modalThemeStyle = {
     "--company-primary": palette.primary,
     "--company-accent": palette.accent,
@@ -116,7 +119,7 @@ export function DutyProgressModal({ duty, site, onClose }: DutyProgressModalProp
   } as CSSProperties;
   const workflowIndex = getWorkflowIndex(duty.status);
   const photoGroups = useMemo(() => [
-    { title: "Reference photos", photos: duty.referencePhotos },
+    { title: "Reference media", photos: duty.referencePhotos },
     { title: "Before photos", photos: duty.beforePhotos },
     { title: "After photos", photos: duty.afterPhotos },
     { title: "Completion photos", photos: duty.completionPhotos },
@@ -169,6 +172,33 @@ export function DutyProgressModal({ duty, site, onClose }: DutyProgressModalProp
     setPhotoViewer((current) => current
       ? { ...current, index: (current.index + 1) % current.photos.length }
       : current);
+  }
+
+  function handleViewerTouchEnd(event: React.TouchEvent<HTMLDivElement>) {
+    if (!viewerTouchStart) {
+      return;
+    }
+
+    const changedTouch = event.changedTouches[0];
+    const distanceX = (changedTouch?.clientX ?? viewerTouchStart.x) - viewerTouchStart.x;
+    const distanceY = (changedTouch?.clientY ?? viewerTouchStart.y) - viewerTouchStart.y;
+    setViewerTouchStart(null);
+
+    if (distanceY < -60 && Math.abs(distanceY) > Math.abs(distanceX)) {
+      setPhotoViewer(null);
+      return;
+    }
+
+    if (Math.abs(distanceX) < 40 || Math.abs(distanceX) <= Math.abs(distanceY) || !photoViewer || photoViewer.photos.length < 2) {
+      return;
+    }
+
+    if (distanceX > 0) {
+      showPreviousPhoto();
+      return;
+    }
+
+    showNextPhoto();
   }
 
   return createPortal(
@@ -284,9 +314,9 @@ export function DutyProgressModal({ duty, site, onClose }: DutyProgressModalProp
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <ImageIcon className="h-4 w-4 text-slate-500" />
-                <h3 id="evidence-title" className="text-sm font-semibold text-slate-950">Photos and evidence</h3>
+                <h3 id="evidence-title" className="text-sm font-semibold text-slate-950">Media and evidence</h3>
               </div>
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{photoCount} photos</span>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{photoCount} items</span>
             </div>
             {photoGroups.length > 0 ? (
               <div className="mt-4 space-y-5">
@@ -300,7 +330,7 @@ export function DutyProgressModal({ duty, site, onClose }: DutyProgressModalProp
                 ))}
               </div>
             ) : (
-              <p className="mt-3 text-sm text-slate-500">No photos have been uploaded for this duty yet.</p>
+              <p className="mt-3 text-sm text-slate-500">No media has been uploaded for this duty yet.</p>
             )}
           </section>
 
@@ -337,8 +367,27 @@ export function DutyProgressModal({ duty, site, onClose }: DutyProgressModalProp
       </Card>
 
       {photoViewer ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950 p-3 sm:p-4" role="dialog" aria-modal="true" aria-label={`${photoViewer.title} viewer`}>
-          <button type="button" onClick={() => setPhotoViewer(null)} className="absolute right-4 top-4 z-10 rounded-full bg-white/15 p-3 text-white transition hover:bg-white/25" aria-label="Close photo viewer">
+        <div
+          className="fixed inset-0 z-[60] flex touch-none items-center justify-center bg-slate-950 p-3 sm:p-4"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setPhotoViewer(null);
+          }}
+          onTouchStart={(event) => {
+            const touch = event.touches[0];
+            setViewerTouchStart(touch ? { x: touch.clientX, y: touch.clientY } : null);
+          }}
+          onTouchEnd={handleViewerTouchEnd}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${photoViewer.title} viewer`}
+        >
+          <button
+            type="button"
+            onClick={() => setPhotoViewer(null)}
+            className="absolute z-10 rounded-full bg-white p-3 text-slate-950 shadow-xl ring-1 ring-white/40 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-white"
+            style={{ right: "max(1rem, env(safe-area-inset-right))", top: "max(1rem, env(safe-area-inset-top))" }}
+            aria-label="Close media viewer"
+          >
             <X className="h-6 w-6" />
           </button>
           {photoViewer.photos.length > 1 ? (
@@ -346,7 +395,11 @@ export function DutyProgressModal({ duty, site, onClose }: DutyProgressModalProp
               <ChevronLeft className="h-7 w-7" />
             </button>
           ) : null}
-          <img src={photoViewer.photos[photoViewer.index]} alt={`${photoViewer.title} ${photoViewer.index + 1}`} className="max-h-[82dvh] max-w-full select-none rounded-md object-contain" draggable={false} />
+          {getReferenceMediaType(photoViewer.photos[photoViewer.index] ?? "") === "video" ? (
+            <video src={photoViewer.photos[photoViewer.index]} className="max-h-[82dvh] max-w-full rounded-md object-contain" controls playsInline preload="metadata" />
+          ) : (
+            <img src={photoViewer.photos[photoViewer.index]} alt={`${photoViewer.title} ${photoViewer.index + 1}`} className="max-h-[82dvh] max-w-full select-none rounded-md object-contain" draggable={false} />
+          )}
           {photoViewer.photos.length > 1 ? (
             <button type="button" onClick={showNextPhoto} className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/15 p-3 text-white transition hover:bg-white/25" aria-label="Next photo">
               <ChevronRight className="h-7 w-7" />
@@ -399,7 +452,14 @@ function PhotoGroup({ title, photos, onOpen }: { title: string; photos: string[]
             className="group relative aspect-[3/4] overflow-hidden rounded-md bg-slate-100 ring-1 ring-slate-200 transition hover:ring-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
             aria-label={`Open ${title.toLowerCase()} ${index + 1}`}
           >
-            <img src={photoUrl} alt={`${title} ${index + 1}`} className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]" loading="lazy" />
+            {getReferenceMediaType(photoUrl) === "video" ? (
+              <>
+                <video src={photoUrl} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+                <span className="absolute inset-0 grid place-items-center bg-slate-950/20 text-white"><Play className="h-7 w-7 fill-current" /></span>
+              </>
+            ) : (
+              <img src={photoUrl} alt={`${title} ${index + 1}`} className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]" loading="lazy" />
+            )}
             <span className="absolute bottom-2 right-2 rounded-full bg-slate-950/75 px-2 py-1 text-xs font-semibold text-white">{index + 1}</span>
           </button>
         ))}

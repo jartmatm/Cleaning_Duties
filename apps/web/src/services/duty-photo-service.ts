@@ -1,9 +1,19 @@
 import { supabase } from "./supabase-client";
 import { optimizeImageForUpload } from "./image-optimization-service";
+import { isVideoFile } from "../utils/reference-media";
 
-function fileExtension(fileName: string) {
-  const match = fileName.match(/\.([a-zA-Z0-9]+)$/);
-  return match?.[1]?.toLowerCase() ?? "jpg";
+function fileExtension(file: File) {
+  const match = file.name.match(/\.([a-zA-Z0-9]+)$/);
+  if (match?.[1]) {
+    return match[1].toLowerCase();
+  }
+
+  const mimeExtension = {
+    "video/mp4": "mp4",
+    "video/quicktime": "mov",
+    "video/webm": "webm",
+  }[file.type];
+  return mimeExtension ?? "jpg";
 }
 
 function safeSegment(value: string) {
@@ -36,9 +46,15 @@ export async function uploadDutyReferencePhotos(params: {
   const uploadedUrls: string[] = [];
 
   for (const file of params.files) {
-    const optimizedImage = await optimizeImageForUpload(file);
-    const uploadFile = optimizedImage.file;
-    const fileName = `${safeSegment(params.dutyTitle || "duty")}-${crypto.randomUUID()}.${fileExtension(uploadFile.name)}`;
+    const videoFile = isVideoFile(file);
+
+    if (videoFile && params.folder && params.folder !== "reference") {
+      throw new Error("Duty evidence only accepts image files.");
+    }
+
+    const optimizedImage = videoFile ? null : await optimizeImageForUpload(file);
+    const uploadFile = optimizedImage?.file ?? file;
+    const fileName = `${safeSegment(params.dutyTitle || "duty")}-${crypto.randomUUID()}.${fileExtension(uploadFile)}`;
     const storagePath = `${safeSegment(params.siteId)}/${safeSegment(params.folder ?? "reference")}/${Date.now()}-${fileName}`;
     const { error } = await supabase.storage.from(params.bucketName).upload(storagePath, uploadFile, {
       cacheControl: "3600",
@@ -53,13 +69,15 @@ export async function uploadDutyReferencePhotos(params: {
     const { data } = supabase.storage.from(params.bucketName).getPublicUrl(storagePath);
     uploadedUrls.push(data.publicUrl);
 
-    console.info("Duty photo optimized", {
-      originalBytes: optimizedImage.originalBytes,
-      optimizedBytes: optimizedImage.optimizedBytes,
-      reductionPercentage: optimizedImage.reductionPercentage,
-      originalDimensions: `${optimizedImage.originalWidth}x${optimizedImage.originalHeight}`,
-      optimizedDimensions: `${optimizedImage.optimizedWidth}x${optimizedImage.optimizedHeight}`,
-    });
+    if (optimizedImage) {
+      console.info("Duty photo optimized", {
+        originalBytes: optimizedImage.originalBytes,
+        optimizedBytes: optimizedImage.optimizedBytes,
+        reductionPercentage: optimizedImage.reductionPercentage,
+        originalDimensions: `${optimizedImage.originalWidth}x${optimizedImage.originalHeight}`,
+        optimizedDimensions: `${optimizedImage.optimizedWidth}x${optimizedImage.optimizedHeight}`,
+      });
+    }
   }
 
   return uploadedUrls;
@@ -95,7 +113,7 @@ export async function uploadUnplannedDutyPhotos(params: {
   for (const file of params.files) {
     const optimizedImage = await optimizeImageForUpload(file);
     const uploadFile = optimizedImage.file;
-    const fileName = `${safeSegment(params.dutyTitle || "unplanned-duty")}-${crypto.randomUUID()}.${fileExtension(uploadFile.name)}`;
+    const fileName = `${safeSegment(params.dutyTitle || "unplanned-duty")}-${crypto.randomUUID()}.${fileExtension(uploadFile)}`;
     const storagePath = [
       safeSegment(params.siteId),
       "unplanned",

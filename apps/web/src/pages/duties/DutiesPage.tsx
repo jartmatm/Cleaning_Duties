@@ -1,4 +1,4 @@
-import { Check, Filter, Loader2, Plus, Search, Pencil, Upload, Trash2, X } from "lucide-react";
+import { Check, Filter, Loader2, Play, Plus, Search, Pencil, Upload, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -20,6 +20,7 @@ import { dutyFormSchema, type DutyFormInput, DUTY_PRIORITIES, DUTY_STATUSES } fr
 import { notify } from "../../components/common/toast";
 import { uploadDutyReferencePhoto } from "../../services/duty-photo-service";
 import { formatDate } from "../../utils/date-format";
+import { getReferenceMediaType, isVideoFile, type ReferenceMediaType } from "../../utils/reference-media";
 import {
   createPreloadedDuty,
   deletePreloadedDuty,
@@ -34,6 +35,7 @@ type ReferencePhotoItem = {
   remoteUrl: string | null;
   status: "uploading" | "done" | "error";
   fileName: string;
+  mediaType: ReferenceMediaType;
 };
 
 type CleanerDutyFilter = "Pending" | DutyItem["status"] | "All";
@@ -639,6 +641,7 @@ export function DutiesPage() {
         remoteUrl: url,
         status: "done",
         fileName: url,
+        mediaType: getReferenceMediaType(url),
       })),
     );
     form.reset({
@@ -669,6 +672,7 @@ export function DutiesPage() {
       remoteUrl: url,
       status: "done" as const,
       fileName: url,
+      mediaType: getReferenceMediaType(url),
     }));
 
     setHasSelectedPreloadedDuty(true);
@@ -702,7 +706,7 @@ export function DutiesPage() {
     }
 
     if (!activeSite || !activeBucketName) {
-      notify({ tone: "error", title: "No site selected", message: "Select a site before uploading photos." });
+      notify({ tone: "error", title: "No site selected", message: "Select a site before uploading reference media." });
       return;
     }
 
@@ -713,6 +717,7 @@ export function DutiesPage() {
       remoteUrl: null,
       status: "uploading" as const,
       fileName: file.name,
+      mediaType: isVideoFile(file) ? "video" as const : "image" as const,
     }));
 
     setReferencePhotoItems((current) => [...current, ...pendingPhotos]);
@@ -751,7 +756,7 @@ export function DutiesPage() {
         );
         notify({
           tone: "error",
-          title: "Photo upload failed",
+          title: "Media upload failed",
           message: error instanceof Error ? error.message : "Unknown error",
         });
       }
@@ -770,7 +775,7 @@ export function DutiesPage() {
 
   async function onSubmit(values: DutyFormInput, draft = false) {
     if (referencePhotoItems.some((photo) => photo.status === "uploading")) {
-      notify({ tone: "error", title: "Photos still uploading", message: "Wait for uploads to finish before saving the duty." });
+      notify({ tone: "error", title: "Media still uploading", message: "Wait for uploads to finish before saving the duty." });
       return;
     }
 
@@ -1145,7 +1150,7 @@ export function DutiesPage() {
             </div>
             <div className="space-y-3 lg:col-span-2">
               <div className="flex items-center justify-between gap-4">
-                <label className="text-sm font-medium">Reference photos</label>
+                <label className="text-sm font-medium">Reference media</label>
                 <Button
                   type="button"
                   variant="secondary"
@@ -1156,17 +1161,16 @@ export function DutiesPage() {
                   disabled={createMutation.isPending || updateMutation.isPending || !activeSite}
                 >
                   <Upload className="h-4 w-4" />
-                  Upload photos
+                  Upload media
                 </Button>
               </div>
               <p className="text-sm text-slate-500">
-                Upload photos or use your device camera. Files are stored in the site bucket for dashboard reports and evidence.
+                Upload images or videos from your device. Files are stored in the site bucket for duty instructions and previews.
               </p>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
-                capture="environment"
+                accept="image/*,video/*"
                 multiple
                 className="hidden"
                 onChange={handlePhotoSelection}
@@ -1174,13 +1178,23 @@ export function DutiesPage() {
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {referencePhotoItems.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 sm:col-span-2 xl:col-span-3">
-                    No reference photos uploaded yet.
+                    No reference media uploaded yet.
                   </div>
                 ) : (
                   referencePhotoItems.map((photo) => (
                     <div key={photo.id} className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                      <img src={photo.previewUrl} alt={photo.fileName} className="h-40 w-full object-cover" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
+                      {photo.mediaType === "video" ? (
+                        <video src={photo.previewUrl} className="h-40 w-full object-cover" controls playsInline preload="metadata" />
+                      ) : (
+                        <img src={photo.previewUrl} alt={photo.fileName} className="h-40 w-full object-cover" />
+                      )}
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
+                      {photo.mediaType === "video" ? (
+                        <span className="pointer-events-none absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-slate-950/75 px-2.5 py-1 text-xs font-semibold text-white">
+                          <Play className="h-3.5 w-3.5 fill-current" />
+                          Video
+                        </span>
+                      ) : null}
                       <div className="absolute left-3 top-3">
                         {photo.status === "uploading" ? (
                           <span className="inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-slate-700">
@@ -1283,9 +1297,9 @@ export function DutiesPage() {
           <Card className="w-full max-w-xl space-y-5 p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-lg font-semibold text-slate-950">Upload reference photos</p>
+                <p className="text-lg font-semibold text-slate-950">Upload reference media</p>
                 <p className="mt-1 text-sm text-slate-500">
-                  Use your camera or gallery. Photos are stored in the bucket for {activeSite?.name ?? "the selected site"}.
+                  Choose images or videos. Media is stored in the bucket for {activeSite?.name ?? "the selected site"}.
                 </p>
               </div>
               <button
@@ -1299,8 +1313,8 @@ export function DutiesPage() {
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm text-slate-700">Native capture is enabled on supported mobile browsers.</p>
-              <p className="mt-1 text-xs text-slate-500">You can upload unlimited images. Each one will show a preview and upload status below.</p>
+              <p className="text-sm text-slate-700">Your device will show its available camera and media library options.</p>
+              <p className="mt-1 text-xs text-slate-500">You can upload multiple images and videos. Each file shows its preview and upload status in the duty editor.</p>
             </div>
 
             <div className="flex flex-wrap justify-end gap-3">

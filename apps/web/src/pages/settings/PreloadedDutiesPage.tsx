@@ -1,4 +1,4 @@
-import { Check, Loader2, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
+import { Check, Loader2, Pencil, Play, Plus, Trash2, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useSearchParams } from "react-router-dom";
@@ -15,6 +15,7 @@ import { notify } from "../../components/common/toast";
 import { useSession } from "../../hooks/use-session";
 import { listSites } from "../../services/sites-service";
 import { uploadDutyReferencePhoto } from "../../services/duty-photo-service";
+import { getReferenceMediaType, isVideoFile, type ReferenceMediaType } from "../../utils/reference-media";
 import {
   createPreloadedDuty,
   deletePreloadedDuty,
@@ -29,6 +30,7 @@ type ReferencePhotoItem = {
   remoteUrl: string | null;
   status: "uploading" | "done" | "error";
   fileName: string;
+  mediaType: ReferenceMediaType;
 };
 const EDITABLE_DUTY_STATUSES = DUTY_STATUSES.filter((status) => status !== "Archived" && status !== "Missed" && status !== "Scheduled");
 
@@ -156,6 +158,7 @@ export function PreloadedDutiesPage() {
         remoteUrl: url,
         status: "done",
         fileName: url,
+        mediaType: getReferenceMediaType(url),
       })),
     );
     form.reset({
@@ -197,6 +200,7 @@ export function PreloadedDutiesPage() {
       remoteUrl: null,
       status: "uploading" as const,
       fileName: file.name,
+      mediaType: isVideoFile(file) ? "video" as const : "image" as const,
     }));
 
     setReferencePhotoItems((current) => [...current, ...pendingPhotos]);
@@ -220,7 +224,7 @@ export function PreloadedDutiesPage() {
         setReferencePhotoItems((current) => current.map((photo) => (photo.id === pendingPhoto.id ? { ...photo, remoteUrl, status: "done" } : photo)));
       } catch (error) {
         setReferencePhotoItems((current) => current.map((photo) => (photo.id === pendingPhoto.id ? { ...photo, status: "error" } : photo)));
-        notify({ tone: "error", title: "Photo upload failed", message: error instanceof Error ? error.message : "Unknown error" });
+        notify({ tone: "error", title: "Media upload failed", message: error instanceof Error ? error.message : "Unknown error" });
       }
     }
   }
@@ -237,7 +241,7 @@ export function PreloadedDutiesPage() {
 
   async function onSubmit(values: DutyFormInput) {
     if (referencePhotoItems.some((photo) => photo.status === "uploading")) {
-      notify({ tone: "error", title: "Photos still uploading", message: "Wait for uploads to finish before saving this template." });
+      notify({ tone: "error", title: "Media still uploading", message: "Wait for uploads to finish before saving this template." });
       return;
     }
 
@@ -268,7 +272,7 @@ export function PreloadedDutiesPage() {
           <div className="flex items-center justify-between gap-4">
             <SectionTitle
               title={editingTemplate ? `Edit ${editingTemplate.title}` : "Create preloaded duty"}
-              description="Save reusable task details and reference photos."
+              description="Save reusable task details and reference media."
             />
             <Button variant="secondary" onClick={closeForm} disabled={createMutation.isPending || updateMutation.isPending}>
               Close
@@ -307,22 +311,32 @@ export function PreloadedDutiesPage() {
             </div>
             <div className="space-y-3 lg:col-span-2">
               <div className="flex items-center justify-between gap-4">
-                <label className="text-sm font-medium">Reference photos</label>
+                <label className="text-sm font-medium">Reference media</label>
                 <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()} disabled={!uploadSite}>
                   <Upload className="h-4 w-4" />
-                  Upload photos
+                  Upload media
                 </Button>
               </div>
-              <input ref={fileInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handlePhotoSelection} />
+              <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handlePhotoSelection} />
               <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
                 {referencePhotoItems.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 sm:col-span-3 lg:col-span-4">
-                    No reference photos uploaded yet.
+                    No reference media uploaded yet.
                   </div>
                 ) : (
                   referencePhotoItems.map((photo) => (
                     <div key={photo.id} className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                      <img src={photo.previewUrl} alt={photo.fileName} className="h-24 w-full object-cover" />
+                      {photo.mediaType === "video" ? (
+                        <video src={photo.previewUrl} className="h-24 w-full object-cover" muted playsInline preload="metadata" />
+                      ) : (
+                        <img src={photo.previewUrl} alt={photo.fileName} className="h-24 w-full object-cover" />
+                      )}
+                      {photo.mediaType === "video" ? (
+                        <span className="pointer-events-none absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-slate-950/75 px-2 py-1 text-[11px] font-semibold text-white">
+                          <Play className="h-3 w-3 fill-current" />
+                          Video
+                        </span>
+                      ) : null}
                       <div className="absolute left-2 top-2">
                         {photo.status === "uploading" ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[11px] font-medium text-slate-700">
@@ -380,7 +394,14 @@ export function PreloadedDutiesPage() {
               {template.referencePhotos.length > 0 ? (
                 <div className="grid grid-cols-4 gap-2">
                   {template.referencePhotos.slice(0, 4).map((photoUrl) => (
-                    <img key={photoUrl} src={photoUrl} alt="" className="h-16 w-full rounded-md object-cover" />
+                    getReferenceMediaType(photoUrl) === "video" ? (
+                      <div key={photoUrl} className="relative h-16 overflow-hidden rounded-md bg-slate-100">
+                        <video src={photoUrl} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+                        <span className="absolute inset-0 grid place-items-center bg-slate-950/20 text-white"><Play className="h-5 w-5 fill-current" /></span>
+                      </div>
+                    ) : (
+                      <img key={photoUrl} src={photoUrl} alt="" className="h-16 w-full rounded-md object-cover" />
+                    )
                   ))}
                 </div>
               ) : null}

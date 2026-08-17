@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent, type TouchEvent } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Pencil, X } from "lucide-react";
+import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Pencil, Play, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { DutyStatusBadge } from "./duty-status-badge";
@@ -12,6 +12,7 @@ import type { SiteItem } from "../../services/sites-service";
 import { getCompanyPalette } from "../../constants/company-palettes";
 import { useSession } from "../../hooks/use-session";
 import { formatDate } from "../../utils/date-format";
+import { getReferenceMediaType } from "../../utils/reference-media";
 
 type CleanerDutyDetailModalProps = {
   duty: DutyItem;
@@ -44,7 +45,7 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
   const [comment, setComment] = useState("");
   const [isEditingCompletedDuty, setIsEditingCompletedDuty] = useState(!isCompletedDuty);
   const [selectedReferencePhotoIndex, setSelectedReferencePhotoIndex] = useState<number | null>(null);
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
   const selectedReferencePhoto = selectedReferencePhotoIndex === null ? null : duty.referencePhotos[selectedReferencePhotoIndex] ?? null;
   const isFormEditable = !isCompletedDuty || isEditingCompletedDuty;
   const visibleBeforePhotoUrls = duty.beforePhotos.filter((photoUrl) => !removedBeforePhotoUrls.includes(photoUrl));
@@ -58,6 +59,24 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
       document.body.style.overflow = previousOverflow;
     };
   }, []);
+
+  useEffect(() => {
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      if (selectedReferencePhotoIndex !== null) {
+        setSelectedReferencePhotoIndex(null);
+        return;
+      }
+
+      onClose();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, selectedReferencePhotoIndex]);
 
   const completeMutation = useMutation({
     mutationFn: async () => {
@@ -136,19 +155,25 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
   }
 
   function handleReferencePhotoTouchEnd(event: TouchEvent<HTMLDivElement>) {
-    if (touchStartX === null) {
+    if (!touchStart) {
       return;
     }
 
-    const touchEndX = event.changedTouches[0]?.clientX ?? touchStartX;
-    const distance = touchEndX - touchStartX;
-    setTouchStartX(null);
+    const changedTouch = event.changedTouches[0];
+    const distanceX = (changedTouch?.clientX ?? touchStart.x) - touchStart.x;
+    const distanceY = (changedTouch?.clientY ?? touchStart.y) - touchStart.y;
+    setTouchStart(null);
 
-    if (Math.abs(distance) < 40) {
+    if (distanceY < -60 && Math.abs(distanceY) > Math.abs(distanceX)) {
+      setSelectedReferencePhotoIndex(null);
       return;
     }
 
-    if (distance > 0) {
+    if (Math.abs(distanceX) < 40 || Math.abs(distanceX) <= Math.abs(distanceY)) {
+      return;
+    }
+
+    if (distanceX > 0) {
       showPreviousReferencePhoto();
       return;
     }
@@ -187,22 +212,32 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
         {duty.referencePhotos.length > 0 ? (
           <div className="mt-5 space-y-3 rounded-md border border-slate-200 bg-white p-3 sm:p-4">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-slate-950">Reference Photos</p>
+              <p className="text-sm font-semibold text-slate-950">Reference media</p>
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{duty.referencePhotos.length}</span>
             </div>
             <div className="-mx-1 flex snap-x flex-wrap gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0">
-              {duty.referencePhotos.map((photoUrl, index) => (
-                <button
-                  key={photoUrl}
-                  type="button"
-                  onClick={() => setSelectedReferencePhotoIndex(index)}
-                  className="group relative h-14 w-14 flex-none snap-start overflow-hidden rounded-md bg-slate-100 ring-1 ring-slate-200 transition hover:ring-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  aria-label={`Open reference photo ${index + 1}`}
-                >
-                  <img src={photoUrl} alt={`Reference photo ${index + 1}`} className="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
-                  <span className="absolute bottom-1 right-1 rounded-full bg-slate-950/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">{index + 1}</span>
-                </button>
-              ))}
+              {duty.referencePhotos.map((photoUrl, index) => {
+                const mediaType = getReferenceMediaType(photoUrl);
+                return (
+                  <button
+                    key={photoUrl}
+                    type="button"
+                    onClick={() => setSelectedReferencePhotoIndex(index)}
+                    className="group relative h-14 w-14 flex-none snap-start overflow-hidden rounded-md bg-slate-100 ring-1 ring-slate-200 transition hover:ring-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    aria-label={`Open reference ${mediaType} ${index + 1}`}
+                  >
+                    {mediaType === "video" ? (
+                      <>
+                        <video src={photoUrl} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+                        <span className="absolute inset-0 grid place-items-center bg-slate-950/20 text-white"><Play className="h-5 w-5 fill-current" /></span>
+                      </>
+                    ) : (
+                      <img src={photoUrl} alt={`Reference image ${index + 1}`} className="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
+                    )}
+                    <span className="absolute bottom-1 right-1 rounded-full bg-slate-950/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">{index + 1}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         ) : null}
@@ -262,17 +297,24 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
       {selectedReferencePhoto ? (
         <div
           className="fixed inset-0 z-[60] flex touch-none items-center justify-center bg-slate-950 p-3 sm:p-4"
-          onTouchStart={(event) => setTouchStartX(event.touches[0]?.clientX ?? null)}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setSelectedReferencePhotoIndex(null);
+          }}
+          onTouchStart={(event) => {
+            const touch = event.touches[0];
+            setTouchStart(touch ? { x: touch.clientX, y: touch.clientY } : null);
+          }}
           onTouchEnd={handleReferencePhotoTouchEnd}
           role="dialog"
           aria-modal="true"
-          aria-label="Reference photo viewer"
+          aria-label="Reference media viewer"
         >
           <button
             type="button"
             onClick={() => setSelectedReferencePhotoIndex(null)}
-            className="absolute right-4 top-4 z-10 rounded-full bg-white/15 p-3 text-white transition hover:bg-white/25"
-            aria-label="Close reference photo viewer"
+            className="absolute z-10 rounded-full bg-white p-3 text-slate-950 shadow-xl ring-1 ring-white/40 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-white"
+            style={{ right: "max(1rem, env(safe-area-inset-right))", top: "max(1rem, env(safe-area-inset-top))" }}
+            aria-label="Close reference media viewer"
           >
             <X className="h-6 w-6" />
           </button>
@@ -286,12 +328,22 @@ export function CleanerDutyDetailModal({ duty, site, userId, onClose, onComplete
               <ChevronLeft className="h-7 w-7" />
             </button>
           ) : null}
-          <img
-            src={selectedReferencePhoto}
-            alt={`Reference photo ${(selectedReferencePhotoIndex ?? 0) + 1}`}
-            className="max-h-[78dvh] w-full max-w-full select-none rounded-md object-contain sm:max-h-[82vh]"
-            draggable={false}
-          />
+          {getReferenceMediaType(selectedReferencePhoto) === "video" ? (
+            <video
+              src={selectedReferencePhoto}
+              className="max-h-[78dvh] max-w-full rounded-md object-contain sm:max-h-[82vh]"
+              controls
+              playsInline
+              preload="metadata"
+            />
+          ) : (
+            <img
+              src={selectedReferencePhoto}
+              alt={`Reference image ${(selectedReferencePhotoIndex ?? 0) + 1}`}
+              className="max-h-[78dvh] max-w-full select-none rounded-md object-contain sm:max-h-[82vh]"
+              draggable={false}
+            />
+          )}
           {duty.referencePhotos.length > 1 ? (
             <button
               type="button"
