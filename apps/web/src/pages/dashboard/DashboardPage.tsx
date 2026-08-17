@@ -219,36 +219,46 @@ function UnplannedDutyRequestDeck({
   onSelect: (request: UnplannedDutyRequest) => void;
 }) {
   const [raisedRequestId, setRaisedRequestId] = useState<string | null>(null);
-  const stackedRequests = useMemo(() => [...requests].reverse(), [requests]);
+  const stackedRequests = useMemo(() => requests.slice(0, 6).reverse(), [requests]);
+  const stackDepth = Math.max(stackedRequests.length - 1, 0);
+  const deckHeight = 144 + stackDepth * 44;
+  const layerOpacity = [1, 0.9, 0.72, 0.5, 0.3, 0.16];
 
   return (
-    <div className="relative isolate pt-1" style={{ perspective: "1100px" }}>
+    <div
+      className="relative isolate w-full"
+      style={{ height: deckHeight, perspective: "1100px" }}
+    >
       {stackedRequests.map((request, index) => {
-        const depth = Math.min(stackedRequests.length - 1 - index, 4);
+        const depth = stackedRequests.length - 1 - index;
+        const isInteractive = depth < 3;
         const isRaised = raisedRequestId === request.id;
         const horizontalInset = depth * 6;
+        const verticalOffset = depth * 44;
 
         return (
           <button
             key={request.id}
             type="button"
-            onClick={() => onSelect(request)}
-            onMouseEnter={() => setRaisedRequestId(request.id)}
+            disabled={!isInteractive}
+            onClick={() => isInteractive && onSelect(request)}
+            onMouseEnter={() => isInteractive && setRaisedRequestId(request.id)}
             onMouseLeave={() => setRaisedRequestId(null)}
-            onFocus={() => setRaisedRequestId(request.id)}
+            onFocus={() => isInteractive && setRaisedRequestId(request.id)}
             onBlur={() => setRaisedRequestId(null)}
-            className="relative block h-36 rounded-lg bg-slate-950 p-4 text-left text-white shadow-lg ring-1 ring-white/10 transition-[transform,box-shadow,background-color] duration-300 ease-out hover:bg-slate-900 hover:shadow-2xl focus:outline-none focus:ring-2 focus:ring-slate-400 motion-reduce:transform-none motion-reduce:transition-none"
+            className={`absolute bottom-0 left-1/2 block h-36 rounded-lg bg-slate-950 p-4 text-left text-white shadow-lg ring-1 ring-white/10 transition-[transform,box-shadow,background-color,opacity] duration-300 ease-out focus:outline-none motion-reduce:transition-none ${isInteractive ? "cursor-pointer hover:bg-slate-900 hover:shadow-2xl focus:ring-2 focus:ring-slate-400" : "cursor-default"}`}
             style={{
               zIndex: isRaised ? stackedRequests.length + 1 : index + 1,
-              marginTop: index === 0 ? 0 : -76,
-              marginLeft: horizontalInset,
-              marginRight: horizontalInset,
+              width: `calc(100% - ${horizontalInset * 2}px)`,
+              opacity: isRaised ? 1 : layerOpacity[depth],
+              pointerEvents: isInteractive ? "auto" : "none",
               transform: isRaised
-                ? "translate3d(0, -8px, 56px) rotateX(0deg)"
-                : `translate3d(0, ${depth * 3}px, ${depth * -32}px) rotateX(${depth * 1.25}deg)`,
-              transformOrigin: "center top",
+                ? `translate3d(-50%, -${verticalOffset + 8}px, 56px) rotateX(0deg)`
+                : `translate3d(-50%, -${verticalOffset}px, ${depth * -32}px) rotateX(${depth * 1.25}deg)`,
+              transformOrigin: "center bottom",
               transformStyle: "preserve-3d",
             }}
+            aria-hidden={!isInteractive}
             aria-label={`Review ${request.title} submitted by ${request.cleanerName}`}
           >
             <div className="flex items-start justify-between gap-4">
