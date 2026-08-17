@@ -21,7 +21,7 @@ type DutyStatusBadgeProps = {
 export function DutyStatusBadge({ status, className = "" }: DutyStatusBadgeProps) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-full border px-3 py-1 text-xs font-semibold ${dutyStatusStyles[status]} ${className}`}
+      className={`inline-flex shrink-0 items-center rounded-lg border px-3 py-1 text-xs font-semibold ${dutyStatusStyles[status]} ${className}`}
     >
       {status}
     </span>
