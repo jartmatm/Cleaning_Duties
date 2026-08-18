@@ -239,7 +239,7 @@ dutyNotificationsRouter.post("/assignments", async (req, res) => {
       });
     }
 
-    const appUrl = env.APP_URL ?? "https://cleaning-duties-web.vercel.app";
+    const appUrl = env.APP_URL ?? "https://cleaningduties.app";
     const emailResults: Array<{ id: string; status: "sent" | "skipped" }> = [];
     const pushResults: Array<{ id: string; status: "sent" | "skipped" }> = [];
     for (const recipient of recipientEmails) {

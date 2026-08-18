@@ -27,7 +27,7 @@ push and email messages. Configure its server-side secrets with:
 npx supabase secrets set \
   ONESIGNAL_APP_ID=3d22eb0b-ce92-4065-b9dc-bf43c4e5d10d \
   ONESIGNAL_REST_API_KEY=your-private-app-api-key \
-  APP_URL=https://cleaning-duties-web.vercel.app \
+  APP_URL=https://cleaningduties.app \
   --project-ref rbkrhaylmxnddwupetck
 
 npx supabase functions deploy notification-events \
@@ -67,4 +67,4 @@ Set these production environment variables:
 - Render API: `STRIPE_SECRET_KEY`
 - Render API: `STRIPE_WEBHOOK_SECRET`
 - Render API: `STRIPE_PRICE_ID`
-- Supabase Edge Function: `APP_URL`, for example `https://cleaning-duties-web.vercel.app`
+- Supabase Edge Function: `APP_URL`, for example `https://cleaningduties.app`

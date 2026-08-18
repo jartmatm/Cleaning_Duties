@@ -30,7 +30,7 @@ type BillingBody = {
 export const billingRouter = Router();
 
 function appUrl(path = "/settings") {
-  const baseUrl = env.APP_URL ?? "https://cleaning-duties-web.vercel.app";
+  const baseUrl = env.APP_URL ?? "https://cleaningduties.app";
   return `${baseUrl.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 }
 

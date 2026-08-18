@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Connecting Google Drive</title>
+  </head>
+  <body>
+    <script>
+      (() => {
+        const source = new URLSearchParams(window.location.search);
+        const target = new URLSearchParams();
+        const code = source.get("code");
+        const state = source.get("state");
+        const error = source.get("error");
+
+        if (code && state) {
+          target.set("google_drive_code", code);
+          target.set("google_drive_state", state);
+        } else {
+          target.set("google_drive_error", error || "incomplete_response");
+        }
+
+        window.location.replace(`/settings#${target.toString()}`);
+      })();
+    </script>
+  </body>
+</html>

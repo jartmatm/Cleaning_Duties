@@ -10,3 +10,8 @@ entrypoint = "./functions/notification-events/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/cleanup-archived-duties/index.ts"
+
+[functions.google-drive-export]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/google-drive-export/index.ts"

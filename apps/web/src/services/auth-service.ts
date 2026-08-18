@@ -56,7 +56,7 @@ export async function signUpManager(input: unknown): Promise<SignupResult> {
     email: values.email,
     password: values.password,
     options: {
-      emailRedirectTo: "https://cleaning-duties-web.vercel.app/",
+      emailRedirectTo: "https://cleaningduties.app/",
       data: {
         company_name: values.companyName,
         full_name: values.managerName,

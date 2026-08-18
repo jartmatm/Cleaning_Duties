@@ -142,8 +142,21 @@ Deno.serve(async (request) => {
       return jsonResponse({ ok: true, deletedDutyCount: 0, deletedMediaCount: 0 });
     }
 
+    const { data: exportSettings, error: exportSettingsError } = await admin
+      .from("company_data_exports")
+      .select("enabled, format, connected_at, last_exported_at")
+      .eq("company_id", profile.company_id)
+      .maybeSingle();
+    if (exportSettingsError) throw exportSettingsError;
+
     const retentionDays = Math.min(Math.max(Number(company.archive_cleanup_days) || 10, 1), 999);
     const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+    const requiresSheetBackup = Boolean(
+      exportSettings?.enabled
+      && exportSettings.format === "google_sheets"
+      && exportSettings.connected_at,
+    );
+    const lastExportedAt = Date.parse(exportSettings?.last_exported_at ?? "");
     const sites = await fetchAllRows<SiteRow>((from, to) => admin
       .from("sites")
       .select("id, storage_bucket, info_photos")
@@ -169,6 +182,10 @@ Deno.serve(async (request) => {
         const archivedAt = Date.parse(duty.completed_at ?? duty.updated_at);
         return Number.isFinite(archivedAt) && archivedAt < cutoff;
       })
+      .filter((duty) => !requiresSheetBackup || (
+        Number.isFinite(lastExportedAt)
+        && lastExportedAt >= Date.parse(duty.updated_at)
+      ))
       .map((duty) => duty.id));
 
     if (eligibleDutyIds.size === 0) {

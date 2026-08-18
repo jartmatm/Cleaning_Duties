@@ -72,7 +72,7 @@ type UnplannedDutyRequestRow = {
 
 const ONE_SIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID") ?? "3d22eb0b-ce92-4065-b9dc-bf43c4e5d10d";
 const ONE_SIGNAL_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY");
-const WEB_APP_URL = (Deno.env.get("APP_URL") ?? "https://cleaning-duties-web.vercel.app").replace(/\/$/, "");
+const WEB_APP_URL = (Deno.env.get("APP_URL") ?? "https://cleaningduties.app").replace(/\/$/, "");
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function escapeHtml(value: string) {
