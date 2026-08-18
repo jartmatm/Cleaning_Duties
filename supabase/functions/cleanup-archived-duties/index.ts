@@ -9,6 +9,7 @@ const corsHeaders = {
 const PAGE_SIZE = 500;
 const STORAGE_REMOVE_BATCH_SIZE = 1000;
 const DATABASE_BATCH_SIZE = 200;
+const DELETABLE_DUTY_STATUSES = new Set(["Archived", "Missed", "Incomplete"]);
 
 type SiteRow = {
   id: string;
@@ -177,10 +178,10 @@ Deno.serve(async (request) => {
     }
 
     const eligibleDutyIds = new Set(duties
-      .filter((duty) => duty.status === "Archived")
+      .filter((duty) => DELETABLE_DUTY_STATUSES.has(duty.status))
       .filter((duty) => {
-        const archivedAt = Date.parse(duty.completed_at ?? duty.updated_at);
-        return Number.isFinite(archivedAt) && archivedAt < cutoff;
+        const closedAt = Date.parse(duty.completed_at ?? duty.updated_at);
+        return Number.isFinite(closedAt) && closedAt < cutoff;
       })
       .filter((duty) => !requiresSheetBackup || (
         Number.isFinite(lastExportedAt)
@@ -276,7 +277,7 @@ Deno.serve(async (request) => {
     });
     return jsonResponse({ ok: true, deletedDutyCount, deletedMediaCount });
   } catch (error) {
-    const message = errorMessage(error, "Archived duty cleanup failed");
+    const message = errorMessage(error, "Closed duty cleanup failed");
     console.error("cleanup-archived-duties", { requestedBy: authData.user.id, message });
     return jsonResponse({ error: message }, 500);
   }
