@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Check, CreditCard, ImageUp, Loader2, RotateCcw, Save } from "lucide-react";
+import { Check, Cloud, CreditCard, ExternalLink, FileSpreadsheet, ImageUp, Loader2, RefreshCw, RotateCcw, Save, Unplug } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
@@ -14,12 +14,34 @@ import { useSession } from "../../hooks/use-session";
 import { updatePassword } from "../../services/auth-service";
 import { createCheckoutSession, createPortalSession, getBillingStatus } from "../../services/billing-service";
 import { getCompanySettings, updateArchiveCleanupSettings, updateCompanySettings, uploadCompanyLogo } from "../../services/company-service";
+import {
+  beginGoogleDriveConnection,
+  completeGoogleDriveConnection,
+  disconnectGoogleDrive,
+  getDataExportSettings,
+  syncDataExportNow,
+  updateDataExportSettings,
+  type DataExportFormat,
+  type DataExportPeriodicity,
+  type DataExportSettings,
+} from "../../services/data-export-service";
 import { getCurrentProfile, updateProfileName } from "../../services/profile-service";
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return "Not scheduled";
+  return new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString("en-AU");
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "Not yet";
+  return new Date(value).toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" });
+}
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const oauthCompletionStartedRef = useRef(false);
   const { userId, companyId, role, setCompanyBranding } = useSession();
   const [companyName, setCompanyName] = useState("");
   const [managerName, setManagerName] = useState("");
@@ -29,6 +51,10 @@ export function SettingsPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [archiveCleanupEnabled, setArchiveCleanupEnabled] = useState(false);
   const [archiveCleanupDays, setArchiveCleanupDays] = useState("10");
+  const [dataExportEnabled, setDataExportEnabled] = useState(false);
+  const [dataExportFormat, setDataExportFormat] = useState<DataExportFormat>("google_sheets");
+  const [dataExportPeriodicity, setDataExportPeriodicity] = useState<DataExportPeriodicity>("daily");
+  const [dataExportIntervalDays, setDataExportIntervalDays] = useState("1");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const canManageCompany = role === "Manager";
@@ -53,6 +79,12 @@ export function SettingsPage() {
     enabled: Boolean(companyId) && canManagePreloadedDuties,
   });
 
+  const { data: dataExport, isLoading: isLoadingDataExport } = useQuery({
+    queryKey: ["company-data-export", companyId],
+    queryFn: () => getDataExportSettings(companyId ?? ""),
+    enabled: Boolean(companyId) && canManageCompany,
+  });
+
   const activePalette = useMemo(() => getCompanyPalette(selectedPalette), [selectedPalette]);
 
   useEffect(() => {
@@ -72,6 +104,71 @@ export function SettingsPage() {
       setManagerName(profile.full_name);
     }
   }, [profile]);
+
+  useEffect(() => {
+    if (!dataExport) return;
+    setDataExportEnabled(dataExport.enabled);
+    setDataExportFormat(dataExport.format);
+    setDataExportPeriodicity(dataExport.periodicity);
+    setDataExportIntervalDays(String(dataExport.intervalDays));
+  }, [dataExport]);
+
+  useEffect(() => {
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const oauthCode = hashParams.get("google_drive_code");
+    const oauthState = hashParams.get("google_drive_state");
+    const oauthError = hashParams.get("google_drive_error");
+    if ((oauthCode && oauthState) || oauthError) {
+      window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
+    }
+
+    if (oauthCode && oauthState && !oauthCompletionStartedRef.current) {
+      oauthCompletionStartedRef.current = true;
+      void completeGoogleDriveConnection(oauthCode, oauthState)
+        .then(async ({ initialSyncFailed }) => {
+          await queryClient.invalidateQueries({ queryKey: ["company-data-export", companyId] });
+          notify({
+            tone: initialSyncFailed ? "info" : "success",
+            title: "Google Drive connected",
+            message: initialSyncFailed
+              ? "The account is connected, but the first export could not be completed. Try Sync now."
+              : "Your analytics file is ready and will keep the same Drive link.",
+          });
+        })
+        .catch((error) => {
+          notify({ tone: "error", title: "Could not connect Google Drive", message: error instanceof Error ? error.message : "Please try again." });
+        });
+      return;
+    }
+
+    if (oauthError) {
+      notify({ tone: "error", title: "Could not connect Google Drive", message: "Google did not complete the authorization." });
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get("google_drive");
+    if (!result) return;
+
+    const detail = params.get("google_drive_detail");
+    if (result === "connected") {
+      notify({
+        tone: detail === "initial_sync_failed" ? "info" : "success",
+        title: "Google Drive connected",
+        message: detail === "initial_sync_failed"
+          ? "The account is connected, but the first export could not be completed. Try Sync now."
+          : "Your analytics file is ready and will keep the same Drive link.",
+      });
+      void queryClient.invalidateQueries({ queryKey: ["company-data-export", companyId] });
+    } else {
+      notify({ tone: "error", title: "Could not connect Google Drive", message: "Please try the connection again." });
+    }
+
+    params.delete("google_drive");
+    params.delete("google_drive_detail");
+    const query = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+  }, [companyId, queryClient]);
 
   useEffect(() => {
     return () => {
@@ -180,6 +277,63 @@ export function SettingsPage() {
     },
   });
 
+  const dataExportMutation = useMutation({
+    mutationFn: async (input: {
+      enabled: boolean;
+      format: DataExportFormat;
+      periodicity: DataExportPeriodicity;
+      intervalDays: number;
+    }) => {
+      if (!companyId) throw new Error("Missing company context");
+      return updateDataExportSettings(companyId, input);
+    },
+    onSuccess: async (updatedSettings) => {
+      setDataExportEnabled(updatedSettings.enabled);
+      setDataExportFormat(updatedSettings.format);
+      setDataExportPeriodicity(updatedSettings.periodicity);
+      setDataExportIntervalDays(String(updatedSettings.intervalDays));
+      queryClient.setQueryData<DataExportSettings | null>(["company-data-export", companyId], updatedSettings);
+      await queryClient.invalidateQueries({ queryKey: ["company-data-export", companyId] });
+    },
+    onError: (error) => {
+      notify({ tone: "error", title: "Could not update data exports", message: error instanceof Error ? error.message : "Unknown error" });
+      setDataExportEnabled(dataExport?.enabled ?? false);
+      setDataExportFormat(dataExport?.format ?? "google_sheets");
+      setDataExportPeriodicity(dataExport?.periodicity ?? "daily");
+      setDataExportIntervalDays(String(dataExport?.intervalDays ?? 1));
+    },
+  });
+
+  const connectDriveMutation = useMutation({
+    mutationFn: () => beginGoogleDriveConnection(window.location.origin),
+    onSuccess: ({ url }) => window.location.assign(url),
+    onError: (error) => {
+      notify({ tone: "error", title: "Could not connect Google Drive", message: error instanceof Error ? error.message : "Unknown error" });
+    },
+  });
+
+  const syncDataExportMutation = useMutation({
+    mutationFn: syncDataExportNow,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["company-data-export", companyId] });
+      notify({ tone: "success", title: "Export updated", message: "The existing Drive file now contains the latest company data." });
+    },
+    onError: (error) => {
+      notify({ tone: "error", title: "Could not update the export", message: error instanceof Error ? error.message : "Unknown error" });
+    },
+  });
+
+  const disconnectDriveMutation = useMutation({
+    mutationFn: disconnectGoogleDrive,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["company-data-export", companyId] });
+      notify({ tone: "success", title: "Google Drive disconnected", message: "Automatic updates are now off. Existing Drive files were kept." });
+    },
+    onError: (error) => {
+      notify({ tone: "error", title: "Could not disconnect Google Drive", message: error instanceof Error ? error.message : "Unknown error" });
+    },
+  });
+
   const checkoutMutation = useMutation({
     mutationFn: async () => {
       if (!companyId) {
@@ -252,8 +406,42 @@ export function SettingsPage() {
     archiveCleanupMutation.mutate({ enabled, days: Number(normalizedDays) });
   }
 
+  function normalizeDataExportInterval(value: string) {
+    const digits = value.replace(/\D/g, "").slice(0, 3);
+    const parsed = Number(digits || 1);
+    return String(Math.min(Math.max(parsed, 1), 999));
+  }
+
+  function saveDataExportSettings(input: {
+    enabled?: boolean;
+    format?: DataExportFormat;
+    periodicity?: DataExportPeriodicity;
+    intervalDays?: string;
+  }) {
+    const nextEnabled = input.enabled ?? dataExportEnabled;
+    const nextFormat = input.format ?? dataExportFormat;
+    const nextPeriodicity = input.periodicity ?? dataExportPeriodicity;
+    const normalizedInterval = normalizeDataExportInterval(input.intervalDays ?? dataExportIntervalDays);
+
+    setDataExportEnabled(nextEnabled);
+    setDataExportFormat(nextFormat);
+    setDataExportPeriodicity(nextPeriodicity);
+    setDataExportIntervalDays(normalizedInterval);
+    dataExportMutation.mutate({
+      enabled: nextEnabled,
+      format: nextFormat,
+      periodicity: nextPeriodicity,
+      intervalDays: Number(normalizedInterval),
+    });
+  }
+
   const isLoading = (canManageCompany && isLoadingCompany) || isLoadingProfile;
   const displayedLogoUrl = logoPreviewUrl ?? logoUrl;
+  const isDriveConnected = Boolean(dataExport?.connectedAt);
+  const isDataExportBusy = dataExportMutation.isPending
+    || connectDriveMutation.isPending
+    || syncDataExportMutation.isPending
+    || disconnectDriveMutation.isPending;
 
   return (
     <div className="space-y-6">
@@ -424,6 +612,152 @@ export function SettingsPage() {
                   </Button>
                 </div>
               </div>
+            </div>
+          </Card>
+
+          <Card className="space-y-6 p-5">
+            <SectionTitle
+              title="Analytics exports"
+              description="Keep a Google Drive file updated for reporting and business intelligence."
+            />
+
+            <div className="flex flex-col gap-4 border-y border-slate-200 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${isDriveConnected ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                  <Cloud className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-950">{isDriveConnected ? "Google Drive connected" : "Connect Google Drive"}</p>
+                  <p className="truncate text-sm text-slate-500">{dataExport?.googleEmail ?? "No Google account connected"}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {isDriveConnected ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => disconnectDriveMutation.mutate()}
+                    disabled={isDataExportBusy}
+                  >
+                    {disconnectDriveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unplug className="h-4 w-4" />}
+                    Disconnect
+                  </Button>
+                ) : (
+                  <Button type="button" onClick={() => connectDriveMutation.mutate()} disabled={isDataExportBusy || isLoadingDataExport}>
+                    {connectDriveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Cloud className="h-4 w-4" />}
+                    Connect
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <Toggle
+                size="md"
+                label="Automatic updates"
+                isSelected={dataExportEnabled}
+                isDisabled={dataExportMutation.isPending || isLoadingDataExport}
+                onChange={(isSelected) => saveDataExportSettings({ enabled: isSelected })}
+              />
+              {dataExportMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : null}
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">File format</label>
+                <div className="grid grid-cols-3 overflow-hidden rounded-md border border-slate-200 bg-slate-50 p-1">
+                  {([
+                    ["google_sheets", "Google Sheets"],
+                    ["csv", "CSV"],
+                    ["json", "JSON"],
+                  ] as Array<[DataExportFormat, string]>).map(([format, label]) => (
+                    <button
+                      key={format}
+                      type="button"
+                      onClick={() => saveDataExportSettings({ format })}
+                      disabled={dataExportMutation.isPending || isLoadingDataExport}
+                      className={`min-h-9 rounded px-2 py-2 text-sm font-medium transition ${
+                        dataExportFormat === format ? "bg-slate-950 text-white shadow-sm" : "text-slate-600 hover:bg-white hover:text-slate-950"
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="data-export-periodicity" className="text-sm font-medium text-slate-700">Periodicity</label>
+                <select
+                  id="data-export-periodicity"
+                  value={dataExportPeriodicity}
+                  onChange={(event) => saveDataExportSettings({ periodicity: event.target.value as DataExportPeriodicity })}
+                  disabled={dataExportMutation.isPending || isLoadingDataExport}
+                  className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100"
+                >
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="custom">Every X days</option>
+                </select>
+              </div>
+            </div>
+
+            {dataExportPeriodicity === "custom" ? (
+              <div className="grid max-w-xs gap-2">
+                <label className="text-sm font-medium text-slate-700">Days between updates</label>
+                <Input
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={3}
+                  value={dataExportIntervalDays}
+                  onChange={(event) => setDataExportIntervalDays(event.target.value.replace(/\D/g, "").slice(0, 3))}
+                  onBlur={() => saveDataExportSettings({ intervalDays: dataExportIntervalDays || "1" })}
+                  disabled={dataExportMutation.isPending}
+                />
+              </div>
+            ) : null}
+
+            <div className="grid gap-3 border-t border-slate-200 pt-4 text-sm sm:grid-cols-3">
+              <div>
+                <p className="text-slate-500">Schedule started</p>
+                <p className="mt-1 font-medium text-slate-950">{formatDate(dataExport?.scheduleStartedAt ?? new Date().toISOString())}</p>
+              </div>
+              <div>
+                <p className="text-slate-500">Next update</p>
+                <p className="mt-1 font-medium text-slate-950">{dataExportEnabled ? formatDateTime(dataExport?.nextRunAt) : "Automatic updates off"}</p>
+              </div>
+              <div>
+                <p className="text-slate-500">Last updated</p>
+                <p className="mt-1 font-medium text-slate-950">{formatDateTime(dataExport?.lastExportedAt)}</p>
+              </div>
+            </div>
+
+            {dataExport?.lastExportStatus === "failed" && dataExport.lastExportError ? (
+              <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700">{dataExport.lastExportError}</p>
+            ) : null}
+
+            <div className="flex flex-wrap justify-end gap-3">
+              {dataExport?.googleFileUrl ? (
+                <Button type="button" variant="secondary" onClick={() => window.open(dataExport.googleFileUrl ?? "", "_blank", "noopener,noreferrer")}>
+                  <ExternalLink className="h-4 w-4" />
+                  Open file
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                onClick={() => syncDataExportMutation.mutate()}
+                disabled={!isDriveConnected || isDataExportBusy}
+              >
+                {syncDataExportMutation.isPending || dataExport?.lastExportStatus === "running" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : dataExportFormat === "google_sheets" ? (
+                  <FileSpreadsheet className="h-4 w-4" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Sync now
+              </Button>
             </div>
           </Card>
 

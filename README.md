@@ -46,4 +46,5 @@ Set these production environment variables:
 - Render API: `STRIPE_SECRET_KEY`
 - Render API: `STRIPE_WEBHOOK_SECRET`
 - Render API: `STRIPE_PRICE_ID`
-- Render API: `APP_URL`, for example `https://cleaning-duties-web.vercel.app`
+- Render API: `APP_URL`, for example `https://cleaningduties.app`
+- Supabase Edge Function: `APP_URL`, for example `https://cleaningduties.app`
