@@ -11,6 +11,9 @@ const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
 const SHEETS_URL = "https://sheets.googleapis.com/v4/spreadsheets";
+const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
+const SPREADSHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 const PAGE_SIZE = 500;
 const ID_BATCH_SIZE = 100;
 const SHEET_WRITE_BATCH_SIZE = 500;
@@ -127,6 +130,11 @@ type ExportData = {
 
 type SheetData = HistoricalSheet;
 
+type GoogleTokenInfo = {
+  aud?: string;
+  scope?: string;
+};
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -207,6 +215,41 @@ function constantTimeEqual(left: string, right: string) {
   return difference === 0;
 }
 
+async function getGoogleTokenInfo(accessToken: string) {
+  try {
+    const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`);
+    if (!response.ok) return null;
+    return await response.json() as GoogleTokenInfo;
+  } catch {
+    return null;
+  }
+}
+
+function hasGoogleExportScope(tokenInfo: GoogleTokenInfo) {
+  const scopes = new Set((tokenInfo.scope ?? "").split(/\s+/).filter(Boolean));
+  return scopes.has(DRIVE_FILE_SCOPE) || scopes.has(DRIVE_SCOPE) || scopes.has(SPREADSHEETS_SCOPE);
+}
+
+async function googleAuthorizationSummary(accessToken: string) {
+  const clientId = Deno.env.get("GOOGLE_DRIVE_CLIENT_ID") ?? "";
+  const expectedProjectNumber = clientId.split("-")[0] || "unknown";
+  const tokenInfo = await getGoogleTokenInfo(accessToken);
+  if (!tokenInfo) return `OAuth project number: ${expectedProjectNumber}; token details unavailable`;
+  const scopes = new Set((tokenInfo.scope ?? "").split(/\s+/).filter(Boolean));
+  return [
+    `OAuth project number: ${expectedProjectNumber}`,
+    `token audience matches client: ${Boolean(clientId && tokenInfo.aud === clientId)}`,
+    `drive.file granted: ${scopes.has(DRIVE_FILE_SCOPE)}`,
+  ].join("; ");
+}
+
+async function revokeGoogleToken(token: string) {
+  await fetch(`${GOOGLE_REVOKE_URL}?token=${encodeURIComponent(token)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  }).catch(() => null);
+}
+
 async function ensureCronGatewayKey(admin: SupabaseClient) {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   if (!anonKey) throw new Error("Supabase anon key is unavailable");
@@ -254,8 +297,9 @@ async function googleRequest<T>(url: string, accessToken: string, init: RequestI
   if (!response.ok) {
     const googleError = body && typeof body === "object" && "error" in body ? JSON.stringify(body.error) : text;
     if (response.status === 403 && url.startsWith(SHEETS_URL)) {
+      const authorizationSummary = await googleAuthorizationSummary(accessToken);
       throw new Error(
-        `Google Sheets denied the request. Enable the Google Sheets API in the Google Cloud project used by this OAuth client, then sync again. Google response: ${googleError || response.statusText}`,
+        `Google Sheets denied the request. Enable the Google Sheets API in the OAuth client project and confirm the connected account can create spreadsheets. ${authorizationSummary}. Google response: ${googleError || response.statusText}`,
       );
     }
     throw new Error(`Google API request failed (${response.status}): ${googleError || response.statusText}`);
@@ -753,7 +797,7 @@ async function authorizeGoogle(request: Request, admin: SupabaseClient, body: Re
     client_id: google.clientId,
     redirect_uri: callbackUrl,
     response_type: "code",
-    scope: "openid email https://www.googleapis.com/auth/drive.file",
+    scope: `openid email ${DRIVE_FILE_SCOPE}`,
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: "true",
@@ -799,6 +843,14 @@ async function completeGoogleOAuth(request: Request, admin: SupabaseClient, body
     throw new Error(tokens.error_description ?? "Google did not return a renewable Drive connection");
   }
 
+  const tokenInfo = await getGoogleTokenInfo(tokens.access_token);
+  if (tokenInfo && !hasGoogleExportScope(tokenInfo)) {
+    await revokeGoogleToken(tokens.refresh_token);
+    throw new Error(
+      `Google did not grant Drive file access. Add ${DRIVE_FILE_SCOPE} in Google Auth Platform > Data Access, then reconnect.`,
+    );
+  }
+
   const userInfo = await googleRequest<{ email?: string }>("https://openidconnect.googleapis.com/v1/userinfo", tokens.access_token);
   const { error: tokenError } = await admin.rpc("store_company_google_refresh_token", {
     p_company_id: oauthState.company_id,
@@ -829,10 +881,7 @@ async function disconnectGoogle(request: Request, admin: SupabaseClient) {
   const manager = await requireManager(request, admin);
   const { data: refreshToken } = await admin.rpc("get_company_google_refresh_token", { p_company_id: manager.companyId });
   if (typeof refreshToken === "string" && refreshToken) {
-    await fetch(`${GOOGLE_REVOKE_URL}?token=${encodeURIComponent(refreshToken)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    }).catch(() => null);
+    await revokeGoogleToken(refreshToken);
   }
 
   const { error: deleteError } = await admin.rpc("delete_company_google_refresh_token", { p_company_id: manager.companyId });
