@@ -765,7 +765,7 @@ export function SettingsPage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <Toggle
                 size="md"
-                label="Delete archived duties"
+                label="Delete closed duties"
                 isSelected={archiveCleanupEnabled}
                 isDisabled={archiveCleanupMutation.isPending || isLoadingCompany}
                 onChange={(isSelected) => {
@@ -779,7 +779,7 @@ export function SettingsPage() {
 
             {archiveCleanupEnabled ? (
               <div className="grid max-w-xs gap-2">
-                <label className="text-sm font-medium text-slate-700">Days to keep archived duties</label>
+                <label className="text-sm font-medium text-slate-700">Days to keep closed duties</label>
                 <Input
                   inputMode="numeric"
                   pattern="[0-9]*"
