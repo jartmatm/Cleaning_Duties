@@ -15,6 +15,7 @@ const PAGE_SIZE = 500;
 const ID_BATCH_SIZE = 100;
 const SHEET_WRITE_BATCH_SIZE = 500;
 const DEFAULT_APP_URL = "https://cleaningduties.app";
+const DEFAULT_TIME_ZONE = "Australia/Melbourne";
 
 type ExportFormat = "google_sheets" | "csv" | "json";
 type ExportPeriodicity = "daily" | "weekly" | "monthly" | "custom";
@@ -50,7 +51,6 @@ type SiteRow = {
   notes: string;
   shift_start_time: string | null;
   shift_end_time: string | null;
-  timezone: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -253,6 +253,11 @@ async function googleRequest<T>(url: string, accessToken: string, init: RequestI
 
   if (!response.ok) {
     const googleError = body && typeof body === "object" && "error" in body ? JSON.stringify(body.error) : text;
+    if (response.status === 403 && url.startsWith(SHEETS_URL)) {
+      throw new Error(
+        `Google Sheets denied the request. Enable the Google Sheets API in the Google Cloud project used by this OAuth client, then sync again. Google response: ${googleError || response.statusText}`,
+      );
+    }
     throw new Error(`Google API request failed (${response.status}): ${googleError || response.statusText}`);
   }
   return body as T;
@@ -283,12 +288,12 @@ async function getAccessToken(admin: SupabaseClient, companyId: string) {
   return { accessToken: payload.access_token as string, refreshToken };
 }
 
-function localDateKey(value: string, timezone: string | null) {
+function localDateKey(value: string) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return value.slice(0, 10);
   try {
     const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone || "Australia/Melbourne",
+      timeZone: DEFAULT_TIME_ZONE,
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -310,7 +315,7 @@ async function collectExportData(admin: SupabaseClient, companyId: string): Prom
 
   const sites = await fetchAllRows<SiteRow>((from, to) => admin
     .from("sites")
-    .select("id, company_id, name, address, notes, shift_start_time, shift_end_time, timezone, created_at, updated_at")
+    .select("id, company_id, name, address, notes, shift_start_time, shift_end_time, created_at, updated_at")
     .eq("company_id", companyId)
     .order("id")
     .range(from, to));
@@ -380,7 +385,7 @@ async function collectExportData(admin: SupabaseClient, companyId: string): Prom
       description: duty.description,
       priority: duty.priority,
       status: duty.status,
-      execution_date: localDateKey(duty.starts_at ?? duty.due_date ?? duty.created_at, site?.timezone ?? null),
+      execution_date: localDateKey(duty.starts_at ?? duty.due_date ?? duty.created_at),
       shift_started_at: duty.starts_at,
       shift_ended_at: duty.due_date,
       completed_at: duty.completed_at,
@@ -421,7 +426,7 @@ async function collectExportData(admin: SupabaseClient, companyId: string): Prom
     name: site.name,
     address: site.address,
     notes: site.notes,
-    timezone: site.timezone,
+    timezone: DEFAULT_TIME_ZONE,
     shift_start_time: site.shift_start_time,
     shift_end_time: site.shift_end_time,
     team_members: siteMembers.filter((member) => member.site_id === site.id).length,
