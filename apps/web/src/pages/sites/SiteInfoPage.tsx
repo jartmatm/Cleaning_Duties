@@ -1,5 +1,6 @@
-import { ImageUp, Loader2, Save, X } from "lucide-react";
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { ChevronLeft, ChevronRight, ImageUp, Loader2, Save, X } from "lucide-react";
+import { useEffect, useRef, useState, type ChangeEvent, type TouchEvent } from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useParams } from "react-router-dom";
 import { Button } from "../../components/ui/button";
@@ -19,6 +20,8 @@ export function SiteInfoPage() {
   const usesAssignedSites = role !== "Manager";
   const [notes, setNotes] = useState("");
   const [infoPhotos, setInfoPhotos] = useState<string[]>([]);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
+  const [viewerTouchStart, setViewerTouchStart] = useState<{ x: number; y: number } | null>(null);
 
   const { data: sites = [], isLoading } = useQuery({
     queryKey: usesAssignedSites ? ["sites", role, userId, "info"] : ["sites", companyId, "info"],
@@ -35,7 +38,25 @@ export function SiteInfoPage() {
 
     setNotes(site.notes);
     setInfoPhotos(site.infoPhotos);
+    setSelectedPhotoIndex(null);
   }, [site]);
+
+  useEffect(() => {
+    if (selectedPhotoIndex === null) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setSelectedPhotoIndex(null);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedPhotoIndex]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -84,6 +105,41 @@ export function SiteInfoPage() {
   function removePhoto(photoUrl: string) {
     setInfoPhotos((current) => current.filter((item) => item !== photoUrl));
   }
+
+  function showPreviousPhoto() {
+    setSelectedPhotoIndex((current) => current === null || infoPhotos.length === 0
+      ? current
+      : (current - 1 + infoPhotos.length) % infoPhotos.length);
+  }
+
+  function showNextPhoto() {
+    setSelectedPhotoIndex((current) => current === null || infoPhotos.length === 0
+      ? current
+      : (current + 1) % infoPhotos.length);
+  }
+
+  function handleViewerTouchEnd(event: TouchEvent<HTMLDivElement>) {
+    if (!viewerTouchStart) return;
+
+    const changedTouch = event.changedTouches[0];
+    const distanceX = (changedTouch?.clientX ?? viewerTouchStart.x) - viewerTouchStart.x;
+    const distanceY = (changedTouch?.clientY ?? viewerTouchStart.y) - viewerTouchStart.y;
+    setViewerTouchStart(null);
+
+    if (distanceY < -60 && Math.abs(distanceY) > Math.abs(distanceX)) {
+      setSelectedPhotoIndex(null);
+      return;
+    }
+
+    if (Math.abs(distanceX) < 40 || Math.abs(distanceX) <= Math.abs(distanceY) || infoPhotos.length < 2) return;
+    if (distanceX > 0) {
+      showPreviousPhoto();
+      return;
+    }
+    showNextPhoto();
+  }
+
+  const selectedPhoto = selectedPhotoIndex === null ? null : infoPhotos[selectedPhotoIndex] ?? null;
 
   return (
     <div className="space-y-6">
@@ -134,9 +190,16 @@ export function SiteInfoPage() {
             <SectionTitle title="Reference photos" description={infoPhotos.length ? `${infoPhotos.length} photos uploaded.` : "No reference photos uploaded yet."} />
             {infoPhotos.length ? (
               <div className="grid grid-cols-2 gap-3">
-                {infoPhotos.map((photoUrl) => (
-                  <div key={photoUrl} className="group relative overflow-hidden rounded-md border border-slate-200 bg-slate-50">
-                    <img src={photoUrl} alt="" className="h-32 w-full object-cover" />
+                {infoPhotos.map((photoUrl, index) => (
+                  <div key={`${photoUrl}-${index}`} className="group relative overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPhotoIndex(index)}
+                      className="block w-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-950"
+                      aria-label={`Open reference photo ${index + 1} of ${infoPhotos.length}`}
+                    >
+                      <img src={photoUrl} alt="" className="h-32 w-full object-cover" />
+                    </button>
                     {canEdit ? (
                       <button
                         type="button"
@@ -156,6 +219,67 @@ export function SiteInfoPage() {
           </Card>
         </div>
       </div>
+
+      {selectedPhoto ? createPortal(
+        <div
+          className="fixed inset-0 z-[70] flex touch-none items-center justify-center bg-slate-950 p-3 sm:p-4"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setSelectedPhotoIndex(null);
+          }}
+          onTouchStart={(event) => {
+            const touch = event.touches[0];
+            setViewerTouchStart(touch ? { x: touch.clientX, y: touch.clientY } : null);
+          }}
+          onTouchEnd={handleViewerTouchEnd}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Site reference photo viewer"
+        >
+          <button
+            type="button"
+            onClick={() => setSelectedPhotoIndex(null)}
+            className="absolute z-10 rounded-full bg-white p-3 text-slate-950 shadow-xl ring-1 ring-white/40 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-white"
+            style={{ right: "max(1rem, env(safe-area-inset-right))", top: "max(1rem, env(safe-area-inset-top))" }}
+            aria-label="Close reference photo viewer"
+          >
+            <X className="h-6 w-6" />
+          </button>
+
+          {infoPhotos.length > 1 ? (
+            <button
+              type="button"
+              onClick={showPreviousPhoto}
+              className="absolute left-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/15 p-3 text-white transition hover:bg-white/25"
+              aria-label="Previous reference photo"
+            >
+              <ChevronLeft className="h-7 w-7" />
+            </button>
+          ) : null}
+
+          <img
+            src={selectedPhoto}
+            alt={`Site reference photo ${(selectedPhotoIndex ?? 0) + 1}`}
+            className="max-h-[82dvh] max-w-full select-none rounded-md object-contain"
+            draggable={false}
+          />
+
+          {infoPhotos.length > 1 ? (
+            <button
+              type="button"
+              onClick={showNextPhoto}
+              className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/15 p-3 text-white transition hover:bg-white/25"
+              aria-label="Next reference photo"
+            >
+              <ChevronRight className="h-7 w-7" />
+            </button>
+          ) : null}
+
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white">
+            {(selectedPhotoIndex ?? 0) + 1} / {infoPhotos.length}
+          </div>
+        </div>,
+        document.body,
+      ) : null}
     </div>
   );
 }
