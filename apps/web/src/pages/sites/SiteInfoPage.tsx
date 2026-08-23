@@ -1,5 +1,5 @@
-import { ChevronLeft, ChevronRight, ImageUp, Loader2, Save, X } from "lucide-react";
-import { useEffect, useRef, useState, type ChangeEvent, type TouchEvent } from "react";
+import { ChevronLeft, ChevronRight, ImageUp, Loader2, RotateCcw, Save, X, ZoomIn, ZoomOut } from "lucide-react";
+import { useEffect, useRef, useState, type ChangeEvent, type TouchEvent, type WheelEvent } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useParams } from "react-router-dom";
@@ -11,9 +11,14 @@ import { notify } from "../../components/common/toast";
 import { useSession } from "../../hooks/use-session";
 import { listMySites, listSites, updateSiteInformation, uploadSiteInfoPhoto } from "../../services/sites-service";
 
+type Point = { x: number; y: number };
+
 export function SiteInfoPage() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const viewerImageRef = useRef<HTMLImageElement | null>(null);
+  const pinchStartRef = useRef<{ distance: number; scale: number; midpoint: Point; offset: Point } | null>(null);
+  const panStartRef = useRef<{ point: Point; offset: Point } | null>(null);
   const { siteId } = useParams();
   const { companyId, userId, role } = useSession();
   const canEdit = role === "Manager";
@@ -22,6 +27,8 @@ export function SiteInfoPage() {
   const [infoPhotos, setInfoPhotos] = useState<string[]>([]);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
   const [viewerTouchStart, setViewerTouchStart] = useState<{ x: number; y: number } | null>(null);
+  const [zoomScale, setZoomScale] = useState(1);
+  const [zoomOffset, setZoomOffset] = useState<Point>({ x: 0, y: 0 });
 
   const { data: sites = [], isLoading } = useQuery({
     queryKey: usesAssignedSites ? ["sites", role, userId, "info"] : ["sites", companyId, "info"],
@@ -42,6 +49,12 @@ export function SiteInfoPage() {
   }, [site]);
 
   useEffect(() => {
+    setZoomScale(1);
+    setZoomOffset({ x: 0, y: 0 });
+    pinchStartRef.current = null;
+    panStartRef.current = null;
+    setViewerTouchStart(null);
+
     if (selectedPhotoIndex === null) return;
 
     const previousOverflow = document.body.style.overflow;
@@ -118,7 +131,120 @@ export function SiteInfoPage() {
       : (current + 1) % infoPhotos.length);
   }
 
+  function clampZoomOffset(offset: Point, scale: number) {
+    const image = viewerImageRef.current;
+    if (!image || scale <= 1) return { x: 0, y: 0 };
+
+    const availableWidth = Math.max(0, window.innerWidth - 24);
+    const availableHeight = Math.max(0, window.innerHeight - 24);
+    const maxX = Math.max(0, (image.offsetWidth * scale - availableWidth) / 2);
+    const maxY = Math.max(0, (image.offsetHeight * scale - availableHeight) / 2);
+    return {
+      x: Math.min(Math.max(offset.x, -maxX), maxX),
+      y: Math.min(Math.max(offset.y, -maxY), maxY),
+    };
+  }
+
+  function updateZoom(nextScaleValue: number, focalPoint?: Point) {
+    const nextScale = Math.min(Math.max(nextScaleValue, 1), 4);
+    const ratio = nextScale / zoomScale;
+    const center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    const focal = focalPoint ?? center;
+    const nextOffset = nextScale === 1
+      ? { x: 0, y: 0 }
+      : {
+          x: focal.x - center.x - ratio * (focal.x - center.x - zoomOffset.x),
+          y: focal.y - center.y - ratio * (focal.y - center.y - zoomOffset.y),
+        };
+
+    setZoomScale(nextScale);
+    setZoomOffset(clampZoomOffset(nextOffset, nextScale));
+  }
+
+  function resetZoom() {
+    setZoomScale(1);
+    setZoomOffset({ x: 0, y: 0 });
+  }
+
+  function touchPoint(touch: { clientX: number; clientY: number }) {
+    return { x: touch.clientX, y: touch.clientY };
+  }
+
+  function touchDistance(first: { clientX: number; clientY: number }, second: { clientX: number; clientY: number }) {
+    return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+  }
+
+  function touchMidpoint(first: { clientX: number; clientY: number }, second: { clientX: number; clientY: number }) {
+    return { x: (first.clientX + second.clientX) / 2, y: (first.clientY + second.clientY) / 2 };
+  }
+
+  function handleViewerTouchStart(event: TouchEvent<HTMLDivElement>) {
+    if (event.touches.length >= 2) {
+      const first = event.touches[0];
+      const second = event.touches[1];
+      if (!first || !second) return;
+      pinchStartRef.current = {
+        distance: touchDistance(first, second),
+        scale: zoomScale,
+        midpoint: touchMidpoint(first, second),
+        offset: zoomOffset,
+      };
+      panStartRef.current = null;
+      setViewerTouchStart(null);
+      return;
+    }
+
+    const touch = event.touches[0];
+    if (!touch) return;
+    const point = touchPoint(touch);
+    setViewerTouchStart(point);
+    panStartRef.current = zoomScale > 1 ? { point, offset: zoomOffset } : null;
+  }
+
+  function handleViewerTouchMove(event: TouchEvent<HTMLDivElement>) {
+    if (event.touches.length >= 2 && pinchStartRef.current) {
+      const first = event.touches[0];
+      const second = event.touches[1];
+      if (!first || !second) return;
+
+      const pinch = pinchStartRef.current;
+      const nextScale = Math.min(Math.max(pinch.scale * (touchDistance(first, second) / Math.max(pinch.distance, 1)), 1), 4);
+      const midpoint = touchMidpoint(first, second);
+      const center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+      const ratio = nextScale / pinch.scale;
+      const nextOffset = {
+        x: midpoint.x - center.x - ratio * (pinch.midpoint.x - center.x - pinch.offset.x),
+        y: midpoint.y - center.y - ratio * (pinch.midpoint.y - center.y - pinch.offset.y),
+      };
+      setZoomScale(nextScale);
+      setZoomOffset(clampZoomOffset(nextOffset, nextScale));
+      return;
+    }
+
+    const touch = event.touches[0];
+    const panStart = panStartRef.current;
+    if (!touch || !panStart || zoomScale <= 1) return;
+    setZoomOffset(clampZoomOffset({
+      x: panStart.offset.x + touch.clientX - panStart.point.x,
+      y: panStart.offset.y + touch.clientY - panStart.point.y,
+    }, zoomScale));
+  }
+
   function handleViewerTouchEnd(event: TouchEvent<HTMLDivElement>) {
+    if (pinchStartRef.current) {
+      pinchStartRef.current = null;
+      panStartRef.current = null;
+      setViewerTouchStart(null);
+      if (zoomScale < 1.05) resetZoom();
+      return;
+    }
+
+    if (zoomScale > 1) {
+      panStartRef.current = null;
+      setViewerTouchStart(null);
+      return;
+    }
+
     if (!viewerTouchStart) return;
 
     const changedTouch = event.changedTouches[0];
@@ -137,6 +263,11 @@ export function SiteInfoPage() {
       return;
     }
     showNextPhoto();
+  }
+
+  function handleViewerWheel(event: WheelEvent<HTMLDivElement>) {
+    event.preventDefault();
+    updateZoom(zoomScale + (event.deltaY < 0 ? 0.35 : -0.35), { x: event.clientX, y: event.clientY });
   }
 
   const selectedPhoto = selectedPhotoIndex === null ? null : infoPhotos[selectedPhotoIndex] ?? null;
@@ -226,11 +357,10 @@ export function SiteInfoPage() {
           onClick={(event) => {
             if (event.target === event.currentTarget) setSelectedPhotoIndex(null);
           }}
-          onTouchStart={(event) => {
-            const touch = event.touches[0];
-            setViewerTouchStart(touch ? { x: touch.clientX, y: touch.clientY } : null);
-          }}
+          onTouchStart={handleViewerTouchStart}
+          onTouchMove={handleViewerTouchMove}
           onTouchEnd={handleViewerTouchEnd}
+          onWheel={handleViewerWheel}
           role="dialog"
           aria-modal="true"
           aria-label="Site reference photo viewer"
@@ -257,9 +387,12 @@ export function SiteInfoPage() {
           ) : null}
 
           <img
+            ref={viewerImageRef}
             src={selectedPhoto}
             alt={`Site reference photo ${(selectedPhotoIndex ?? 0) + 1}`}
-            className="max-h-[82dvh] max-w-full select-none rounded-md object-contain"
+            className={`max-h-[82dvh] max-w-full select-none rounded-md object-contain ${zoomScale > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"}`}
+            style={{ transform: `translate3d(${zoomOffset.x}px, ${zoomOffset.y}px, 0) scale(${zoomScale})`, willChange: "transform" }}
+            onDoubleClick={(event) => updateZoom(zoomScale > 1 ? 1 : 2.25, { x: event.clientX, y: event.clientY })}
             draggable={false}
           />
 
@@ -274,8 +407,48 @@ export function SiteInfoPage() {
             </button>
           ) : null}
 
-          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white">
+          <div
+            className="absolute left-1/2 -translate-x-1/2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm"
+            style={{ bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 3.75rem)" }}
+          >
             {(selectedPhotoIndex ?? 0) + 1} / {infoPhotos.length}
+          </div>
+
+          <div
+            className="absolute left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-md bg-white/15 p-1 text-white backdrop-blur-sm"
+            style={{ bottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
+          >
+            <button
+              type="button"
+              onClick={() => updateZoom(zoomScale - 0.5)}
+              disabled={zoomScale <= 1}
+              className="rounded p-2 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Zoom out"
+              title="Zoom out"
+            >
+              <ZoomOut className="h-5 w-5" />
+            </button>
+            <span className="w-12 text-center text-xs font-semibold">{Math.round(zoomScale * 100)}%</span>
+            <button
+              type="button"
+              onClick={() => updateZoom(zoomScale + 0.5)}
+              disabled={zoomScale >= 4}
+              className="rounded p-2 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Zoom in"
+              title="Zoom in"
+            >
+              <ZoomIn className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={resetZoom}
+              disabled={zoomScale <= 1}
+              className="rounded p-2 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Reset zoom"
+              title="Reset zoom"
+            >
+              <RotateCcw className="h-5 w-5" />
+            </button>
           </div>
         </div>,
         document.body,
